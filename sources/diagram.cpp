@@ -845,6 +845,17 @@ QDomDocument Diagram::toXml(bool whole_content, bool is_copy_command) {
 					  m_freeze_new_conductors_
 					  ? QStringLiteral("true") : QStringLiteral("false"));
 
+		//Cabinet layout
+		if (m_cabinet_layout_enabled) {
+			dom_root.setAttribute(QStringLiteral("cabinetLayoutEnabled"),
+						  QStringLiteral("true"));
+			dom_root.setAttribute(QStringLiteral("cabinetLayoutScale"),
+						  QString::number(m_cabinet_layout_scale, 'g', 10));
+			dom_root.setAttribute(QStringLiteral("cabinetLayoutView"),
+						  m_cabinet_layout_view == CabinetLayoutSide
+						  ? QStringLiteral("side") : QStringLiteral("front"));
+		}
+
 		//Element Folio Sequential Variables
 		if (!m_elmt_unitfolio_max.isEmpty()
 				|| !m_elmt_tenfolio_max.isEmpty()
@@ -1327,6 +1338,15 @@ bool Diagram::fromXml(QDomElement &document,
 
 			// Load Freeze New Conductor
 		m_freeze_new_conductors_ = root.attribute(QStringLiteral("freezeNewConductor")).toInt();
+
+			// Load cabinet layout
+		m_cabinet_layout_enabled =
+				root.attribute(QStringLiteral("cabinetLayoutEnabled")) == QLatin1String("true");
+		m_cabinet_layout_scale =
+				root.attribute(QStringLiteral("cabinetLayoutScale"), QStringLiteral("2")).toDouble();
+		m_cabinet_layout_view =
+				root.attribute(QStringLiteral("cabinetLayoutView")) == QLatin1String("side")
+				? CabinetLayoutSide : CabinetLayoutFront;
 
 			//Load Element Folio Sequential
 		folioSequentialsFromXml(root,
