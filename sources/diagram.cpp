@@ -1730,6 +1730,11 @@ void Diagram::addItem(QGraphicsItem *item)
 			conductor->calculateTextItemPosition();
 			break;
 		}
+		case CabinetLayoutReferenceItem::Type:
+		{
+			emit cabinetLayoutReferencesChanged();
+			break;
+		}
 		default: {break;}
 	}
 }
@@ -1743,6 +1748,9 @@ void Diagram::addItem(QGraphicsItem *item)
 void Diagram::removeItem(QGraphicsItem *item)
 {
 	if (!item || isReadOnly()) return;
+
+	const bool is_cabinet_layout_reference =
+			(item->type() == CabinetLayoutReferenceItem::Type);
 
 	switch (item->type())
 	{
@@ -1764,6 +1772,9 @@ void Diagram::removeItem(QGraphicsItem *item)
 	}
 
 	QGraphicsScene::removeItem(item);
+
+	if (is_cabinet_layout_reference)
+		emit cabinetLayoutReferencesChanged();
 }
 /**
 	@brief Diagram::titleChanged

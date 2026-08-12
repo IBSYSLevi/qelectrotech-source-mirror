@@ -91,19 +91,9 @@ void DiagramEventAddCabinetLayoutReference::mousePressEvent(QGraphicsSceneMouseE
 	{
 		QPointF pos = event->scenePos();
 		if (event->modifiers() != Qt::ControlModifier) {
-			pos = Diagram::snapToGrid(pos);
+			pos = snapToNearbyReferenceEdges(pos);
 		}
 		m_reference_item->setPos(pos);
-
-		qWarning() << "mousePressEvent LEFT CLICK CONFIRM, pos=" << pos
-				   << "m_reference_item=" << m_reference_item
-				   << "scene items with our type before push:"
-				   << [this]() {
-				   	int n = 0;
-				   	for (auto *it : m_diagram->items())
-				   		if (it->type() == m_reference_item->type()) ++n;
-				   	return n;
-		}();
 
 		m_diagram->undoStack().push(
 			new AddGraphicsObjectCommand(m_reference_item, m_diagram, pos));
@@ -134,10 +124,99 @@ void DiagramEventAddCabinetLayoutReference::mouseMoveEvent(QGraphicsSceneMouseEv
 
 	QPointF pos = event->scenePos();
 	if (event->modifiers() != Qt::ControlModifier) {
-		pos = Diagram::snapToGrid(pos);
+		pos = snapToNearbyReferenceEdges(pos);
 	}
 	m_reference_item->setPos(pos);
 	event->setAccepted(true);
+}
+
+/**
+	@brief DiagramEventAddCabinetLayoutReference::snapToNearbyReferenceEdges
+	@param pos the box's candidate top-left position (its own
+	pos()/boundingRect() origin, not the cursor position -- caller is
+	responsible for any cursor-to-item-origin offset).
+	@return @a pos, adjusted so the moving box's left or right edge
+	lands exactly on another CabinetLayoutReferenceItem's left/right
+	edge if one is within a generous horizontal snap radius, and its
+	top edge lands exactly on another box's top edge if one is
+	already within a much tighter vertical tolerance. Left/right
+	snapping is deliberately eager (it's the point of this feature --
+	letting boxes butt up against each other despite their own
+	fractional widths); top snapping is deliberately reluctant, since
+	devices in the same row commonly have different heights and
+	forcing their tops together would misrepresent that.
+*/
+QPointF DiagramEventAddCabinetLayoutReference::snapToNearbyReferenceEdges(QPointF pos) const
+{
+	if (!m_reference_item)
+		return pos;
+
+		//Horizontal: actively snap within a comfortable drag radius.
+		//Vertical: only snap if already nearly aligned -- a tight
+		//tolerance, not a magnet.
+	constexpr qreal horizontal_snap_tolerance = 15.0;
+	constexpr qreal vertical_snap_tolerance = 4.0;
+
+	const qreal box_width  = m_reference_item->boundingRect().width();
+	const qreal box_height = m_reference_item->boundingRect().height();
+
+	qreal best_dx = horizontal_snap_tolerance;
+	qreal best_dy = vertical_snap_tolerance;
+	bool found_x = false;
+	bool found_y = false;
+	qreal snapped_x = pos.x();
+	qreal snapped_y = pos.y();
+
+	const qreal moving_left  = pos.x();
+	const qreal moving_right = pos.x() + box_width;
+	const qreal moving_top   = pos.y();
+
+	for (QGraphicsItem *item : m_diagram->items())
+	{
+		if (item->type() != CabinetLayoutReferenceItem::Type || item == m_reference_item)
+			continue;
+
+		const QRectF other = item->sceneBoundingRect();
+
+			//Left edge of the moving box to the right edge of another
+			//(most common case: placing boxes left-to-right in a row).
+		if (qAbs(moving_left - other.right()) < best_dx) {
+			best_dx = qAbs(moving_left - other.right());
+			snapped_x = other.right();
+			found_x = true;
+		}
+			//Right edge of the moving box to the left edge of another.
+		if (qAbs(moving_right - other.left()) < best_dx) {
+			best_dx = qAbs(moving_right - other.left());
+			snapped_x = other.left() - box_width;
+			found_x = true;
+		}
+			//Left-to-left / right-to-right, for boxes stacked in a
+			//column rather than a row.
+		if (qAbs(moving_left - other.left()) < best_dx) {
+			best_dx = qAbs(moving_left - other.left());
+			snapped_x = other.left();
+			found_x = true;
+		}
+		if (qAbs(moving_right - other.right()) < best_dx) {
+			best_dx = qAbs(moving_right - other.right());
+			snapped_x = other.right() - box_width;
+			found_x = true;
+		}
+
+		if (qAbs(moving_top - other.top()) < best_dy) {
+			best_dy = qAbs(moving_top - other.top());
+			snapped_y = other.top();
+			found_y = true;
+		}
+	}
+
+	Q_UNUSED(box_height)
+
+	const QPointF grid_pos = Diagram::snapToGrid(pos);
+
+	return QPointF(found_x ? snapped_x : grid_pos.x(),
+					found_y ? snapped_y : grid_pos.y());
 }
 
 void DiagramEventAddCabinetLayoutReference::init()

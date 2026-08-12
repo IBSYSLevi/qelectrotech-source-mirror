@@ -79,6 +79,9 @@ class CabinetLayoutSourceModel : public QStandardItemModel
 		*/
 		void setActiveDiagram(Diagram *diagram);
 
+	private slots:
+		void connectDiagram(Diagram *diagram);
+
 	public slots:
 		void reload();
 

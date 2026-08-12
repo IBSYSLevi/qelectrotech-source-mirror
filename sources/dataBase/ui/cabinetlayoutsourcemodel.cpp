@@ -48,6 +48,14 @@ CabinetLayoutSourceModel::CabinetLayoutSourceModel(QETProject *project, QObject 
 				this, &CabinetLayoutSourceModel::reload);
 	}
 
+	if (m_project) {
+		for (Diagram *dia : m_project->diagrams())
+			connectDiagram(dia);
+
+		connect(m_project, &QETProject::diagramAdded,
+				this, [this](QETProject *, Diagram *dia) { connectDiagram(dia); });
+	}
+
 	reload();
 }
 
@@ -65,6 +73,19 @@ void CabinetLayoutSourceModel::setActiveDiagram(Diagram *diagram)
 }
 
 /**
+	@brief CabinetLayoutSourceModel::connectDiagram
+	See header.
+*/
+void CabinetLayoutSourceModel::connectDiagram(Diagram *diagram)
+{
+	if (!diagram)
+		return;
+
+	connect(diagram, &Diagram::cabinetLayoutReferencesChanged,
+			this, &CabinetLayoutSourceModel::reload);
+}
+
+/**
 	@brief CabinetLayoutSourceModel::reload
 	Rebuild the whole tree from the project's element_nomenclature_view.
 	Folios are the top-level items (one per diagram, ordered by folio
@@ -74,6 +95,8 @@ void CabinetLayoutSourceModel::setActiveDiagram(Diagram *diagram)
 */
 void CabinetLayoutSourceModel::reload()
 {
+	qWarning() << "CabinetLayoutSourceModel::reload CALLED";
+
 	removeRows(0, rowCount());
 
 	if (!m_project || !m_project->dataBase())

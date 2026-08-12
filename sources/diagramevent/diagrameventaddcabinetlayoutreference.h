@@ -52,6 +52,16 @@ class CabinetLayoutReferenceItem;
 	callers must therefore check isRunning() themselves right after
 	construction and, if false, delete the interface directly instead
 	of handing it to Diagram::setEventInterface().
+
+	Position is snapped to other CabinetLayoutReferenceItem boxes'
+	edges rather than to Diagram's own grid (@see
+	snapToNearbyReferenceEdges()): with box sizes computed from real
+	device dimensions x a scale factor, a box's width/height is
+	essentially never an exact multiple of the grid step, so two boxes
+	dragged to grid-aligned positions can still end up with a visible
+	gap or a several-pixel overlap between them -- edge-snapping lets
+	boxes butt up against each other exactly regardless of their own
+	fractional size.
 */
 class DiagramEventAddCabinetLayoutReference : public DiagramEventInterface
 {
@@ -70,6 +80,7 @@ class DiagramEventAddCabinetLayoutReference : public DiagramEventInterface
 
 	private:
 		CabinetLayoutReferenceItem *m_reference_item;
+		QPointF snapToNearbyReferenceEdges(QPointF pos) const;
 };
 
 #endif // DIAGRAMEVENTADDCABINETLAYOUTREFERENCE_H

@@ -315,6 +315,8 @@ class Diagram : public QGraphicsScene
 
 		void diagramActivated();
 		void diagramInformationChanged();
+
+		void cabinetLayoutReferencesChanged();
 };
 Q_DECLARE_METATYPE(Diagram *)
 
