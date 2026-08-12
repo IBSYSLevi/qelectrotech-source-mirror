@@ -57,4 +57,16 @@ void CabinetLayoutSourceWidget::setProject(QETProject *project)
 	m_model = new CabinetLayoutSourceModel(project, this);
 	m_tree_view->setModel(m_model);
 	m_tree_view->expandAll();
+	connect(m_model, &QAbstractItemModel::rowsInserted,
+			m_tree_view, &QTreeView::expandAll);
+}
+
+/**
+	@brief CabinetLayoutSourceWidget::setActiveDiagram
+	See header.
+*/
+void CabinetLayoutSourceWidget::setActiveDiagram(Diagram *diagram)
+{
+	if (m_model)
+		m_model->setActiveDiagram(diagram);
 }

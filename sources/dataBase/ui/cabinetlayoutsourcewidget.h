@@ -24,6 +24,7 @@
 class QETProject;
 class QTreeView;
 class CabinetLayoutSourceModel;
+class Diagram;
 
 /**
 	@brief The CabinetLayoutSourceWidget class
@@ -42,6 +43,14 @@ class CabinetLayoutSourceWidget : public QWidget
 	~CabinetLayoutSourceWidget() override = default;
 
 	void setProject(QETProject *project);
+
+	/**
+		@brief setActiveDiagram
+		Forwarded to the underlying CabinetLayoutSourceModel so it
+		can grey out devices already placed for the active folio's
+		view (front/side). Call whenever the active folio changes.
+	*/
+	void setActiveDiagram(Diagram *diagram);
 
 private:
 	QTreeView *m_tree_view;

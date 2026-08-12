@@ -2630,8 +2630,11 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 	slot_updateWindowsMenu();
 	emit syncElementsPanel();
 	updateUsageTrackersActiveState();
-	if (m_cabinet_layout_source_widget)
+	if (m_cabinet_layout_source_widget) {
 		m_cabinet_layout_source_widget->setProject(currentProject());
+		m_cabinet_layout_source_widget->setActiveDiagram(
+			currentDiagramView() ? currentDiagramView()->diagram() : nullptr);
+	}
 	updateWindowModifiedState();
 }
 

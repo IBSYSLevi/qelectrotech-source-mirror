@@ -23,6 +23,7 @@
 #include <QPointer>
 
 class QETProject;
+class Diagram;
 
 /**
 	@brief The CabinetLayoutSourceModel class
@@ -45,6 +46,16 @@ class QETProject;
 	The model rebuilds itself whenever the project's database signals
 	that it was updated (@see projectDataBase::dataBaseUpdated), so it
 	stays in sync as elements are added, removed or edited.
+
+	Devices already placed as a cabinet layout reference matching the
+	*currently active folio's* view (front/side, @see
+	Diagram::cabinetLayoutView()) are shown greyed out and not
+	draggable, since CabinetLayoutReferenceItem::existsReferenceFor()
+	would reject a second one for that exact (device, view)
+	combination anyway. This is folio-dependent, not global: the same
+	device is drag-enabled again once the active folio's view differs
+	from the one it's already placed as -- @see setActiveDiagram(),
+	called whenever the active MDI subwindow changes.
 */
 class CabinetLayoutSourceModel : public QStandardItemModel
 {
@@ -59,11 +70,21 @@ class CabinetLayoutSourceModel : public QStandardItemModel
 
 		static const QString CABINET_LAYOUT_SOURCE_MIME_TYPE;
 
+		/**
+			@brief setActiveDiagram
+			@param diagram the folio the user currently has active, whose
+			cabinetLayoutView() determines which already-placed devices
+			get greyed out on the next reload(). Passing nullptr (no
+			folio active) greys out nothing.
+		*/
+		void setActiveDiagram(Diagram *diagram);
+
 	public slots:
 		void reload();
 
 	private:
 		QPointer<QETProject> m_project;
+		QPointer<Diagram> m_active_diagram;
 };
 
 #endif // CABINETLAYOUTSOURCEMODEL_H

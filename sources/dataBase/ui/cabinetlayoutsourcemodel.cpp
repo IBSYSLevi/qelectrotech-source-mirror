@@ -18,14 +18,15 @@
 
 #include "cabinetlayoutsourcemodel.h"
 
-#include "../projectdatabase.h"
 #include "../../qetproject.h"
+#include "../projectdatabase.h"
+#include "cabinetlayoutreferenceitem.h"
 
-#include <QSqlQuery>
-#include <QSqlError>
-#include <QMimeData>
-#include <QFont>
 #include <QBrush>
+#include <QFont>
+#include <QMimeData>
+#include <QSqlError>
+#include <QSqlQuery>
 
 const QString CabinetLayoutSourceModel::CABINET_LAYOUT_SOURCE_MIME_TYPE =
 		QStringLiteral("application/x-qet-cabinet-layout-uuid");
@@ -47,6 +48,19 @@ CabinetLayoutSourceModel::CabinetLayoutSourceModel(QETProject *project, QObject 
 				this, &CabinetLayoutSourceModel::reload);
 	}
 
+	reload();
+}
+
+/**
+	@brief CabinetLayoutSourceModel::setActiveDiagram
+	See header.
+*/
+void CabinetLayoutSourceModel::setActiveDiagram(Diagram *diagram)
+{
+	if (m_active_diagram == diagram)
+		return;
+
+	m_active_diagram = diagram;
 	reload();
 }
 
@@ -122,22 +136,22 @@ void CabinetLayoutSourceModel::reload()
 		if (!has_dimensions)
 			element_label = QStringLiteral("⚠ ") + element_label;
 
+		const bool already_placed = m_active_diagram
+				&& m_active_diagram->cabinetLayoutEnabled()
+				&& CabinetLayoutReferenceItem::existsReferenceFor(
+					   m_project, QUuid(uuid),
+					   m_active_diagram->cabinetLayoutView() == Diagram::CabinetLayoutSide);
+
 		auto *element_item = new QStandardItem(element_label);
 		element_item->setEditable(false);
-		element_item->setDragEnabled(has_dimensions);
+		element_item->setDragEnabled(has_dimensions && !already_placed);
 		element_item->setDropEnabled(false);
 		element_item->setData(uuid, Qt::UserRole);
 		element_item->setData(width,  Qt::UserRole + 1);
 		element_item->setData(height, Qt::UserRole + 2);
 		element_item->setData(depth,  Qt::UserRole + 3);
 
-		if (has_dimensions) {
-			element_item->setToolTip(
-				tr("Largeur : %1 mm, Hauteur : %2 mm, Profondeur : %3 mm")
-					.arg(width.isEmpty()  ? QStringLiteral("—") : width)
-					.arg(height.isEmpty() ? QStringLiteral("—") : height)
-					.arg(depth.isEmpty()  ? QStringLiteral("—") : depth));
-		} else {
+		if (!has_dimensions) {
 			QFont font = element_item->font();
 			font.setItalic(true);
 			element_item->setFont(font);
@@ -146,6 +160,21 @@ void CabinetLayoutSourceModel::reload()
 				tr("Aucune dimension renseignée pour cet élément -- "
 				   "ajoutez au moins la largeur ou la hauteur dans "
 				   "l'éditeur d'élément pour pouvoir le glisser ici."));
+		} else if (already_placed) {
+				//Deliberately not italic (unlike the missing-dimensions
+				//case above): italic is reserved for "this entry needs
+				//attention/action", whereas an already-placed device is
+				//simply unavailable right now, not a problem to fix.
+			element_item->setForeground(QBrush(Qt::gray));
+			element_item->setToolTip(
+				tr("Déjà placé sur ce type de vue (face/côté) -- "
+				   "changez de folio ou de vue pour le replacer."));
+		} else {
+			element_item->setToolTip(
+				tr("Largeur : %1 mm, Hauteur : %2 mm, Profondeur : %3 mm")
+					.arg(width.isEmpty()  ? QStringLiteral("—") : width)
+					.arg(height.isEmpty() ? QStringLiteral("—") : height)
+					.arg(depth.isEmpty()  ? QStringLiteral("—") : depth));
 		}
 
 		if (current_folio_item)
