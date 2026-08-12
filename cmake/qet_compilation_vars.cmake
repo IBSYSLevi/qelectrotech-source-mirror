@@ -57,6 +57,8 @@ set(QET_RES_FILES
   ${QET_DIR}/sources/dataBase/ui/cabinetlayoutsourcemodel.h
   ${QET_DIR}/sources/dataBase/ui/cabinetlayoutsourcewidget.cpp
   ${QET_DIR}/sources/dataBase/ui/cabinetlayoutsourcewidget.h
+  ${QET_DIR}/sources/dataBase/ui/cabinetlayoutboxfactory.cpp
+  ${QET_DIR}/sources/dataBase/ui/cabinetlayoutboxfactory.h
   ${QET_DIR}/sources/dataBase/ui/summaryquerywidget.ui
   ${QET_DIR}/sources/editor/ui/dynamictextfieldeditor.ui
   ${QET_DIR}/sources/editor/ui/elementpropertieseditorwidget.ui

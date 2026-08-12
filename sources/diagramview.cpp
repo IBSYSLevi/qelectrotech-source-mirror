@@ -16,28 +16,34 @@
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include "diagramview.h"
-#include "qetproject.h"
+
+#include "ElementsCollection/xmlelementcollection.h"
+#include "NameList/nameslist.h"
 #include "QPropertyUndoCommand/qpropertyundocommand.h"
+#include "dataBase/projectdatabase.h"
+#include "dataBase/ui/cabinetlayoutboxfactory.h"
+#include "dataBase/ui/cabinetlayoutsourcemodel.h"
+#include "diagram.h"
 #include "diagramcommands.h"
 #include "diagramevent/diagrameventaddelement.h"
 #include "diagramevent/diagrameventaddmacro.h"
 #include "dvevent/dveventinterface.h"
+#include "elementdialog.h"
+#include "elementfactory.h"
 #include "projectview.h"
 #include "qetdiagrameditor.h"
 #include "qetgraphicsitem/conductor.h"
 #include "qetgraphicsitem/conductortextitem.h"
 #include "qetgraphicsitem/independenttextitem.h"
 #include "qeticons.h"
+#include "qetproject.h"
 #include "titleblock/integrationmovetemplateshandler.h"
 #include "ui/diagrampropertiesdialog.h"
 #include "ui/multipastedialog.h"
+#include "undocommand/addgraphicsobjectcommand.h"
 #include "undocommand/changetitleblockcommand.h"
 #include "utils/conductorcreator.h"
-#include "undocommand/addgraphicsobjectcommand.h"
-#include "diagram.h"
-#include "ElementsCollection/xmlelementcollection.h"
-#include "NameList/nameslist.h"
-#include "elementdialog.h"
+
 #include <QDropEvent>
 
 /**
@@ -165,9 +171,11 @@ void DiagramView::dragEnterEvent(QDragEnterEvent *e) {
 		e -> acceptProposedAction();
 	} else if (e -> mimeData() -> hasText()) {
 		e -> acceptProposedAction();
-	} else {
+	} else if (e -> mimeData() -> hasFormat(CabinetLayoutSourceModel::CABINET_LAYOUT_SOURCE_MIME_TYPE)) {
+		if (diagram() && diagram()->cabinetLayoutEnabled())
+			e -> acceptProposedAction();
+	} else
 		e -> ignore();
-	}
 }
 
 /**
@@ -175,8 +183,17 @@ void DiagramView::dragEnterEvent(QDragEnterEvent *e) {
 	@param e le QDragMoveEvent correspondant au drag'n drop tente
 */
 void DiagramView::dragMoveEvent(QDragMoveEvent *e) {
-	if (e -> mimeData() -> hasFormat("text/plain")) e -> acceptProposedAction();
-	else e-> ignore();
+	if (e -> mimeData() -> hasFormat("application/x-qet-element-uri")) {
+		e -> acceptProposedAction();
+	} else if (e -> mimeData() -> hasFormat("application/x-qet-titleblock-uri")) {
+		e -> acceptProposedAction();
+	} else if (e -> mimeData() -> hasText()) {
+		e -> acceptProposedAction();
+	} else if (e -> mimeData() -> hasFormat(CabinetLayoutSourceModel::CABINET_LAYOUT_SOURCE_MIME_TYPE)) {
+		if (diagram() && diagram()->cabinetLayoutEnabled())
+			e -> acceptProposedAction();
+	} else
+		e -> ignore();
 }
 
 /**
@@ -184,11 +201,12 @@ void DiagramView::dragMoveEvent(QDragMoveEvent *e) {
 	@param e the QDropEvent describing the current drag'n drop
 */
 void DiagramView::dropEvent(QDropEvent *e) {
-
 	if (e -> mimeData() -> hasFormat("application/x-qet-element-uri")) {
 		handleElementDrop(e);
 	} else if (e -> mimeData() -> hasFormat("application/x-qet-titleblock-uri")) {
 		handleTitleBlockDrop(e);
+	} else if (e -> mimeData() -> hasFormat(CabinetLayoutSourceModel::CABINET_LAYOUT_SOURCE_MIME_TYPE)) {
+		handleCabinetLayoutDrop(e);
 	} else if (e -> mimeData() -> hasText()) {
 		handleTextDrop(e);
 	}
@@ -224,6 +242,71 @@ void DiagramView::handleElementDrop(QDropEvent *event)
 	}
 
 	//Set focus to the view to get event
+	this->setFocus();
+}
+
+/**
+ * @brief DiagramView::handleCabinetLayoutDrop
+ * Handle the drop of an item from the cabinet layout source tree
+ * (@see CabinetLayoutSourceModel): synthesizes a scale-accurate box for
+ * the dropped device -- width x height for a front-view folio, depth x
+ * height for a side-view folio, both looked up fresh from the project
+ * database rather than from the drag payload, and placed the same way
+ * as any ordinary library element drop (@see handleElementDrop).
+ * @param event the QDropEvent describing the current drag and drop
+ */
+void DiagramView::handleCabinetLayoutDrop(QDropEvent *event)
+{
+	if (!diagram() || !diagram()->cabinetLayoutEnabled())
+		return;
+
+	const QString uuid = QString::fromLatin1(
+		event->mimeData()->data(CabinetLayoutSourceModel::CABINET_LAYOUT_SOURCE_MIME_TYPE));
+	if (uuid.isEmpty())
+		return;
+
+	QETProject *project = diagram()->project();
+	if (!project || !project->dataBase())
+		return;
+
+	QSqlQuery query = project->dataBase()->newQuery();
+	query.prepare(
+		"SELECT label, width, height, depth FROM element_nomenclature_view "
+		"WHERE element_uuid = :uuid"
+	);
+	query.bindValue(QStringLiteral(":uuid"), uuid);
+	if (!query.exec() || !query.next()) {
+		qWarning() << "DiagramView::handleCabinetLayoutDrop: element not found for uuid" << uuid;
+		return;
+	}
+
+	const QString label  = query.value("label").toString();
+	const QString width  = query.value("width").toString();
+	const QString height = query.value("height").toString();
+	const QString depth  = query.value("depth").toString();
+
+	const bool is_side_view = diagram()->cabinetLayoutView() == Diagram::CabinetLayoutSide;
+
+	if (!m_cabinet_layout_box_factory)
+		m_cabinet_layout_box_factory = std::make_unique<CabinetLayoutBoxFactory>();
+
+	ElementsLocation box_location = m_cabinet_layout_box_factory->buildBoxLocation(
+		uuid, label, width, height, depth, diagram()->cabinetLayoutScale(), is_side_view);
+
+	if (!(box_location.isElement() && box_location.exist())) {
+		qWarning() << "DiagramView::handleCabinetLayoutDrop: failed to build box for" << label;
+		return;
+	}
+
+	QPointF drop_pos;
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)	// ### Qt 6: remove
+	drop_pos = mapToScene(event->pos());
+#else
+	drop_pos = event->position();
+#endif
+
+	diagram()->setEventInterface(new DiagramEventAddElement(box_location, diagram(), drop_pos));
+
 	this->setFocus();
 }
 

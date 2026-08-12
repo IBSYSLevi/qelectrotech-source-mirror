@@ -179,6 +179,5 @@ QMimeData *CabinetLayoutSourceModel::mimeData(const QModelIndexList &indexes) co
 
 	auto *mime_data = new QMimeData();
 	mime_data->setData(CABINET_LAYOUT_SOURCE_MIME_TYPE, uuid.toLatin1());
-	mime_data->setText(index.data(Qt::DisplayRole).toString());
 	return mime_data;
 }
