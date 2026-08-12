@@ -18,9 +18,9 @@
 #include "diagram.h"
 
 #include "ElementsCollection/elementcollectionhandler.h"
-#include "TerminalStrip/GraphicsItem/terminalstripitem.h"
-#include "xml/terminalstripitemxml.h"
 #include "QPropertyUndoCommand/qpropertyundocommand.h"
+#include "TerminalStrip/GraphicsItem/terminalstripitem.h"
+#include "cabinetlayoutreferenceitem.h"
 #include "diagramcontent.h"
 #include "diagramevent/diagrameventinterface.h"
 #include "diagramposition.h"
@@ -36,10 +36,12 @@
 #include "qetgraphicsitem/independenttextitem.h"
 #include "qetgraphicsitem/qetshapeitem.h"
 #include "qetgraphicsitem/terminal.h"
-#include "qetxml.h"
-#include "undocommand/addelementtextcommand.h"
 #include "qetinformation.h"
 #include "qetproject.h"
+#include "qetxml.h"
+#include "undocommand/addelementtextcommand.h"
+#include "xml/terminalstripitemxml.h"
+
 #include <cassert>
 #include <math.h>
 
@@ -960,6 +962,7 @@ QDomDocument Diagram::toXml(bool whole_content, bool is_copy_command) {
 	QVector<QetShapeItem *> list_shapes;
 	QVector<QetGraphicsTableItem *> table_vector;
 	QVector<TerminalStripItem *> strip_vector;
+	QVector<CabinetLayoutReferenceItem *> list_layout_references;
 
 	//Ckeck graphics item to "XMLise"
 	for(QGraphicsItem *qgi : items())
@@ -1020,6 +1023,12 @@ QDomDocument Diagram::toXml(bool whole_content, bool is_copy_command) {
 				if (whole_content || strip->isSelected()) {
 					strip_vector << strip;
 				}
+				break;
+			}
+			case CabinetLayoutReferenceItem::Type: {
+				auto layout_reference = static_cast<CabinetLayoutReferenceItem *>(qgi);
+				if (whole_content || layout_reference->isSelected())
+					list_layout_references << layout_reference;
 				break;
 			}
 		}
@@ -1084,6 +1093,14 @@ QDomDocument Diagram::toXml(bool whole_content, bool is_copy_command) {
 
 	if (!strip_vector.isEmpty()) {
 		dom_root.appendChild(TerminalStripItemXml::toXml(strip_vector, document));
+	}
+
+	if (!list_layout_references.isEmpty()) {
+		auto layout_references = document.createElement(QStringLiteral("cabinetLayoutReferences"));
+		for (auto layout_reference : list_layout_references) {
+			layout_references.appendChild(layout_reference->toXml(document));
+		}
+		dom_root.appendChild(layout_references);
 	}
 
 
@@ -1516,6 +1533,21 @@ bool Diagram::fromXml(QDomElement &document,
 		//Load terminal strip item
 	QVector<TerminalStripItem *> added_strips { TerminalStripItemXml::fromXml(this, root) };
 
+		//load layout reference
+	QList<CabinetLayoutReferenceItem *> added_layout_references;
+	for (auto ref_xml : QET::findInDomElement(root,
+											   QStringLiteral("cabinetLayoutReferences"),
+											   QStringLiteral("cabinetLayoutReference"))) {
+		auto *layout_reference = new CabinetLayoutReferenceItem(QUuid(), false);
+		addItem(layout_reference);
+		if (!layout_reference->fromXml(ref_xml)) {
+			removeItem(layout_reference);
+			delete layout_reference;
+			continue;
+		}
+		added_layout_references << layout_reference;
+											   }
+
 	//Translate items if a new position was given in parameter
 	if (position != QPointF())
 	{
@@ -1526,6 +1558,7 @@ bool Diagram::fromXml(QDomElement &document,
 		for (auto image   : std::as_const(added_images     )) added_items << image;
 		for (auto table   : std::as_const(added_tables     )) added_items << table;
 		for (const auto &strip : std::as_const(added_strips)) added_items << strip;
+		for (auto layout_reference : std::as_const(added_layout_references)) added_items << layout_reference;
 
 		//Get the top left corner of the rectangle that contain all added items
 		QRectF items_rect;

@@ -57,8 +57,6 @@ set(QET_RES_FILES
   ${QET_DIR}/sources/dataBase/ui/cabinetlayoutsourcemodel.h
   ${QET_DIR}/sources/dataBase/ui/cabinetlayoutsourcewidget.cpp
   ${QET_DIR}/sources/dataBase/ui/cabinetlayoutsourcewidget.h
-  ${QET_DIR}/sources/dataBase/ui/cabinetlayoutboxfactory.cpp
-  ${QET_DIR}/sources/dataBase/ui/cabinetlayoutboxfactory.h
   ${QET_DIR}/sources/dataBase/ui/summaryquerywidget.ui
   ${QET_DIR}/sources/editor/ui/dynamictextfieldeditor.ui
   ${QET_DIR}/sources/editor/ui/elementpropertieseditorwidget.ui
@@ -319,6 +317,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/diagramevent/diagrameventinterface.h
   ${QET_DIR}/sources/diagramevent/diagrameventaddmacro.cpp
   ${QET_DIR}/sources/diagramevent/diagrameventaddmacro.h
+  ${QET_DIR}/sources/diagramevent/diagrameventaddcabinetlayoutreference.cpp
+  ${QET_DIR}/sources/diagramevent/diagrameventaddcabinetlayoutreference.h
 
   ${QET_DIR}/sources/dvevent/dveventinterface.cpp
   ${QET_DIR}/sources/dvevent/dveventinterface.h
@@ -507,6 +507,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/qetgraphicsitem/elementtextitemgroup.h
   ${QET_DIR}/sources/qetgraphicsitem/independenttextitem.cpp
   ${QET_DIR}/sources/qetgraphicsitem/independenttextitem.h
+  ${QET_DIR}/sources/qetgraphicsitem/cabinetlayoutreferenceitem.cpp
+  ${QET_DIR}/sources/qetgraphicsitem/cabinetlayoutreferenceitem.h
   ${QET_DIR}/sources/qetgraphicsitem/masterelement.cpp
   ${QET_DIR}/sources/qetgraphicsitem/masterelement.h
   ${QET_DIR}/sources/qetgraphicsitem/qetgraphicsitem.cpp

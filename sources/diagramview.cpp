@@ -21,17 +21,17 @@
 #include "NameList/nameslist.h"
 #include "QPropertyUndoCommand/qpropertyundocommand.h"
 #include "dataBase/projectdatabase.h"
-#include "dataBase/ui/cabinetlayoutboxfactory.h"
 #include "dataBase/ui/cabinetlayoutsourcemodel.h"
 #include "diagram.h"
 #include "diagramcommands.h"
 #include "diagramevent/diagrameventaddelement.h"
 #include "diagramevent/diagrameventaddmacro.h"
+#include "diagrameventaddcabinetlayoutreference.h"
 #include "dvevent/dveventinterface.h"
 #include "elementdialog.h"
-#include "elementfactory.h"
 #include "projectview.h"
 #include "qetdiagrameditor.h"
+#include "qetgraphicsitem/cabinetlayoutreferenceitem.h"
 #include "qetgraphicsitem/conductor.h"
 #include "qetgraphicsitem/conductortextitem.h"
 #include "qetgraphicsitem/independenttextitem.h"
@@ -260,41 +260,18 @@ void DiagramView::handleCabinetLayoutDrop(QDropEvent *event)
 	if (!diagram() || !diagram()->cabinetLayoutEnabled())
 		return;
 
-	const QString uuid = QString::fromLatin1(
+	const QString uuid_str = QString::fromLatin1(
 		event->mimeData()->data(CabinetLayoutSourceModel::CABINET_LAYOUT_SOURCE_MIME_TYPE));
-	if (uuid.isEmpty())
+	if (uuid_str.isEmpty())
 		return;
 
-	QETProject *project = diagram()->project();
-	if (!project || !project->dataBase())
+	const QUuid source_uuid(uuid_str);
+	if (source_uuid.isNull())
 		return;
-
-	QSqlQuery query = project->dataBase()->newQuery();
-	query.prepare(
-		"SELECT label, width, height, depth FROM element_nomenclature_view "
-		"WHERE element_uuid = :uuid"
-	);
-	query.bindValue(QStringLiteral(":uuid"), uuid);
-	if (!query.exec() || !query.next()) {
-		qWarning() << "DiagramView::handleCabinetLayoutDrop: element not found for uuid" << uuid;
-		return;
-	}
-
-	const QString label  = query.value("label").toString();
-	const QString width  = query.value("width").toString();
-	const QString height = query.value("height").toString();
-	const QString depth  = query.value("depth").toString();
 
 	const bool is_side_view = diagram()->cabinetLayoutView() == Diagram::CabinetLayoutSide;
 
-	if (!m_cabinet_layout_box_factory)
-		m_cabinet_layout_box_factory = std::make_unique<CabinetLayoutBoxFactory>();
-
-	ElementsLocation box_location = m_cabinet_layout_box_factory->buildBoxLocation(
-		uuid, label, width, height, depth, diagram()->cabinetLayoutScale(), is_side_view);
-
-	if (!(box_location.isElement() && box_location.exist())) {
-		qWarning() << "DiagramView::handleCabinetLayoutDrop: failed to build box for" << label;
+	if (CabinetLayoutReferenceItem::existsReferenceFor(diagram()->project(), source_uuid, is_side_view)) {
 		return;
 	}
 
@@ -305,9 +282,19 @@ void DiagramView::handleCabinetLayoutDrop(QDropEvent *event)
 	drop_pos = event->position();
 #endif
 
-	diagram()->setEventInterface(new DiagramEventAddElement(box_location, diagram(), drop_pos));
+	auto *event_interface = new DiagramEventAddCabinetLayoutReference(
+		diagram(), source_uuid, is_side_view, drop_pos);
 
-	this->setFocus();
+	if (!event_interface->isRunning()) {
+		qWarning() << "DiagramView::handleCabinetLayoutDrop: "
+					  "source element not found for uuid" << source_uuid;
+		delete event_interface;
+		return;
+	}
+
+	diagram()->setEventInterface(event_interface);
+
+	QTimer::singleShot(0, this, [this]() { this->setFocus(); });
 }
 
 /**

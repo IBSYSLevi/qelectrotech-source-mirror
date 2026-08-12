@@ -23,7 +23,6 @@
 
 #include <QClipboard>
 #include <QGraphicsView>
-#include <memory>
 
 class Conductor;
 class Diagram;
@@ -62,8 +61,6 @@ class DiagramView : public QGraphicsView
 		QList<QAction *>  m_separators;
 		QPolygonF m_free_rubberband;
 		bool m_free_rubberbanding = false;
-		std::unique_ptr<class CabinetLayoutBoxFactory> m_cabinet_layout_box_factory;
-		
 		
 	public:
 		QString title() const;
