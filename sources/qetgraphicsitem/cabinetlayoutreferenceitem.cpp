@@ -20,13 +20,13 @@
 
 #include "../diagram.h"
 #include "../qetproject.h"
-#include "../dataBase/projectdatabase.h"
 #include "../elementprovider.h"
 #include "../qetgraphicsitem/element.h"
 
 #include <QPainter>
-#include <QSqlQuery>
-#include <QSqlError>
+#include <QPen>
+#include <QStyleOptionGraphicsItem>
+#include <QGraphicsSceneMouseEvent>
 
 CabinetLayoutReferenceItem::CabinetLayoutReferenceItem(
 		const QUuid &source_element_uuid,
@@ -68,6 +68,31 @@ void CabinetLayoutReferenceItem::rebuildFont()
 	m_font.setPointSize(font_size);
 }
 
+/**
+	@brief CabinetLayoutReferenceItem::recomputeBoxSize
+	Recomputes m_box_width/m_box_height from the cached real-world
+	m_real_width_mm/m_real_height_mm and this folio's current
+	Diagram::cabinetLayoutScale(). Deliberately reads the *current*
+	scale each time rather than caching a pre-scaled pixel size, so an
+	orphaned reference (whose mm values can't be refreshed until the
+	next reload) still tracks a later change to the folio's own scale
+	setting correctly.
+*/
+void CabinetLayoutReferenceItem::recomputeBoxSize()
+{
+	prepareGeometryChange();
+
+	qreal scale = diagram() ? diagram()->cabinetLayoutScale() : 0.0;
+	if (scale <= 0.0)
+		scale = 2.0; //fall back to the library's informal default
+
+	m_box_width  = (m_real_width_mm  > 0.0) ? m_real_width_mm  * scale : 20.0;
+	m_box_height = (m_real_height_mm > 0.0) ? m_real_height_mm * scale : 20.0;
+
+	rebuildFont();
+	update();
+}
+
 void CabinetLayoutReferenceItem::paint(
 		QPainter *painter,
 		const QStyleOptionGraphicsItem *options,
@@ -77,24 +102,34 @@ void CabinetLayoutReferenceItem::paint(
 
 	painter->save();
 
-	QPen pen(Qt::black);
+	QPen pen(m_is_orphaned ? Qt::red : Qt::black);
 	pen.setCosmetic(true);
+	if (m_is_orphaned)
+		pen.setStyle(Qt::DashLine);
 	painter->setPen(pen);
-	painter->setBrush(Qt::NoBrush);
+	painter->setBrush(QColor(200, 200, 200, 65));
 	painter->drawRect(boundingRect());
 
 	painter->setFont(m_font);
+	const QString display_label = m_is_orphaned
+			? QStringLiteral("⚠ ") + m_label
+			: m_label;
+
 	const bool is_narrow = m_box_width < m_box_height;
 	if (is_narrow) {
+			//Scoped in its own save()/restore(): translate()/rotate()
+			//must not leak into the selection-highlight rect drawn
+			//below, or that rect ends up shifted and reshaped by the
+			//same transform as the rotated text.
 		painter->save();
 		painter->translate(boundingRect().center());
 		painter->rotate(270);
 		QRectF rotated_rect(-m_box_height / 2, -m_box_width / 2,
 							 m_box_height, m_box_width);
-		painter->drawText(rotated_rect, Qt::AlignCenter, m_label);
+		painter->drawText(rotated_rect, Qt::AlignCenter, display_label);
 		painter->restore();
 	} else {
-		painter->drawText(boundingRect(), Qt::AlignCenter, m_label);
+		painter->drawText(boundingRect(), Qt::AlignCenter, display_label);
 	}
 
 	if (isSelected() || isHovered()) {
@@ -109,53 +144,81 @@ void CabinetLayoutReferenceItem::paint(
 }
 
 /**
-	@brief CabinetLayoutReferenceItem::refreshFromSource
-	@return see header.
+	@brief CabinetLayoutReferenceItem::applyElementData
+	Pulls label/width/height/depth directly off an already-found,
+	live Element -- no database round-trip -- and updates this item's
+	cache and on-screen size accordingly. Shared by linkToSource()'s
+	success path and onSourceInfoChanged().
 */
-bool CabinetLayoutReferenceItem::refreshFromSource()
+void CabinetLayoutReferenceItem::applyElementData(Element *element)
 {
-	Diagram *dia = diagram();
-	if (!dia || !dia->project() || !dia->project()->dataBase())
-		return false;
-
-	QSqlQuery query = dia->project()->dataBase()->newQuery();
-	query.prepare(
-		"SELECT label, width, height, depth FROM element_nomenclature_view "
-		"WHERE element_uuid = :uuid"
-	);
-	query.bindValue(QStringLiteral(":uuid"), m_source_element_uuid.toString());
-	if (!query.exec() || !query.next()) {
-		qWarning() << "CabinetLayoutReferenceItem::refreshFromSource: "
-					  "source element not found for uuid"
-				   << m_source_element_uuid;
-		return false;
-	}
-
-	prepareGeometryChange();
-
-	m_label = query.value("label").toString();
+	m_label = element->actualLabel();
 	if (m_label.isEmpty())
 		m_label = QObject::tr("(sans label)");
 
+	const DiagramContext info = element->elementInformations();
 	bool w_ok = false, h_ok = false;
-	const QString width_mm_str  = query.value("width").toString();
-	const QString height_mm_str = query.value("height").toString();
-	const QString depth_mm_str  = query.value("depth").toString();
+	const qreal width_mm  = info.value(QStringLiteral("width")).toString().toDouble(&w_ok);
+	const qreal height_mm = info.value(QStringLiteral("height")).toString().toDouble(&h_ok);
+	const qreal depth_mm  = info.value(QStringLiteral("depth")).toString().toDouble();
 
-	const qreal real_width_mm  = (m_is_side_view ? depth_mm_str : width_mm_str).toDouble(&w_ok);
-	const qreal real_height_mm = height_mm_str.toDouble(&h_ok);
+	m_real_width_mm  = w_ok ? (m_is_side_view ? depth_mm : width_mm) : 0.0;
+	m_real_height_mm = h_ok ? height_mm : 0.0;
 
-	qreal scale = dia->cabinetLayoutScale();
-	if (scale <= 0.0)
-		scale = 2.0; //fall back to the library's informal default
+	recomputeBoxSize();
+}
 
-	m_box_width  = (w_ok && real_width_mm  > 0.0) ? real_width_mm  * scale : 20.0;
-	m_box_height = (h_ok && real_height_mm > 0.0) ? real_height_mm * scale : 20.0;
+/**
+	@brief CabinetLayoutReferenceItem::linkToSource
+	See header.
+*/
+void CabinetLayoutReferenceItem::linkToSource(QETProject *project)
+{
+	if (!project)
+		return;
 
-	rebuildFont();
+	ElementProvider provider(project);
+	const QList<Element *> found = provider.fromUuids({m_source_element_uuid});
+	if (found.isEmpty()) {
+		m_is_orphaned = true;
+		update();
+		return;
+	}
+
+	m_source_element = found.first();
+	m_is_orphaned = false;
+
+	connect(m_source_element.data(), &Element::elementInfoChange,
+			this, &CabinetLayoutReferenceItem::onSourceInfoChanged,
+			Qt::UniqueConnection);
+	connect(m_source_element.data(), &QObject::destroyed,
+			this, &CabinetLayoutReferenceItem::onSourceDestroyed,
+			Qt::UniqueConnection);
+
+	applyElementData(m_source_element.data());
+}
+
+/**
+	@brief CabinetLayoutReferenceItem::onSourceInfoChanged
+	See header.
+*/
+void CabinetLayoutReferenceItem::onSourceInfoChanged()
+{
+	if (!m_source_element)
+		return;
+
+	applyElementData(m_source_element.data());
+}
+
+/**
+	@brief CabinetLayoutReferenceItem::onSourceDestroyed
+	See header.
+*/
+void CabinetLayoutReferenceItem::onSourceDestroyed()
+{
+	m_is_orphaned = true;
+	m_source_element = nullptr;
 	update();
-
-	return true;
 }
 
 /**
@@ -164,20 +227,10 @@ bool CabinetLayoutReferenceItem::refreshFromSource()
 */
 void CabinetLayoutReferenceItem::jumpToSource() const
 {
-	Diagram *dia = diagram();
-	if (!dia || !dia->project())
+	if (!m_source_element)
 		return;
 
-	ElementProvider provider(dia->project());
-	const QList<Element *> found = provider.fromUuids({m_source_element_uuid});
-	if (found.isEmpty()) {
-		qWarning() << "CabinetLayoutReferenceItem::jumpToSource: "
-					  "source element not found for uuid"
-				   << m_source_element_uuid;
-		return;
-	}
-
-	Element *source = found.first();
+	Element *source = m_source_element.data();
 	if (!source->diagram())
 		return;
 
@@ -216,7 +269,7 @@ bool CabinetLayoutReferenceItem::existsReferenceFor(
 			if (reference->sourceElementUuid() == source_element_uuid
 				&& reference->isSideView() == is_side_view) {
 				return true;
-				}
+			}
 		}
 	}
 	return false;
@@ -224,12 +277,14 @@ bool CabinetLayoutReferenceItem::existsReferenceFor(
 
 /**
 	@brief CabinetLayoutReferenceItem::toXml
-	Deliberately minimal compared to Element::toXml(): only what
-	can't be recomputed from the project database is stored. Label
-	and current width/height are looked up fresh via
-	refreshFromSource() every time this item is loaded, rather than
-	cached here -- that's the whole point of this item being a live
-	reference rather than a snapshot.
+	Stores only what can't be recomputed from a live Element (the
+	source's UUID, this item's own position/rotation), plus a cache of
+	the source's last known label and real-world width/height in mm.
+	The cache exists purely for the orphaned case (@see linkToSource()
+	and the class comment on why linking is a one-shot, not a live
+	database lookup): once successfully linked, it's kept accurate via
+	Element::elementInfoChange, so a save always persists the current
+	state.
 */
 QDomElement CabinetLayoutReferenceItem::toXml(QDomDocument &document) const
 {
@@ -241,9 +296,22 @@ QDomElement CabinetLayoutReferenceItem::toXml(QDomDocument &document) const
 	element.setAttribute(QStringLiteral("y"), QString::number(pos().y()));
 	element.setAttribute(QStringLiteral("z"), QString::number(zValue()));
 	element.setAttribute(QStringLiteral("rotation"), QString::number(rotation()));
+	element.setAttribute(QStringLiteral("last_known_label"), m_label);
+	element.setAttribute(QStringLiteral("last_known_width_mm"), QString::number(m_real_width_mm));
+	element.setAttribute(QStringLiteral("last_known_height_mm"), QString::number(m_real_height_mm));
 	return element;
 }
 
+/**
+	@brief CabinetLayoutReferenceItem::fromXml
+	Parses this item's own saved state directly -- no database or
+	Element lookup here at all, hence no dependency on load order
+	across folios. Always shows the last known cached label/size
+	immediately, as orphaned, until linkToSource() (called once from
+	Diagram::refreshContents(), after every folio has finished
+	loading) either confirms the source is still there or leaves it
+	orphaned.
+*/
 bool CabinetLayoutReferenceItem::fromXml(const QDomElement &dom_element)
 {
 	if (dom_element.tagName() != QLatin1String("cabinetLayoutReference"))
@@ -257,5 +325,14 @@ bool CabinetLayoutReferenceItem::fromXml(const QDomElement &dom_element)
 	setZValue(dom_element.attribute(QStringLiteral("z"), QString::number(zValue())).toDouble());
 	setRotation(dom_element.attribute(QStringLiteral("rotation"), QStringLiteral("0")).toDouble());
 
-	return refreshFromSource();
+	m_label = dom_element.attribute(QStringLiteral("last_known_label"));
+	if (m_label.isEmpty())
+		m_label = QObject::tr("(sans label)");
+	m_real_width_mm  = dom_element.attribute(QStringLiteral("last_known_width_mm")).toDouble();
+	m_real_height_mm = dom_element.attribute(QStringLiteral("last_known_height_mm")).toDouble();
+
+	m_is_orphaned = true; //until linkToSource() says otherwise
+	recomputeBoxSize();
+
+	return true;
 }

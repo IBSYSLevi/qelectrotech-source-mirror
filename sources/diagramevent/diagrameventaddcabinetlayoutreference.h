@@ -22,6 +22,7 @@
 #include "diagrameventinterface.h"
 
 #include <QUuid>
+#include <QPointF>
 
 class CabinetLayoutReferenceItem;
 

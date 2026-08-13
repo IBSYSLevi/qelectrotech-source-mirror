@@ -1540,11 +1540,7 @@ bool Diagram::fromXml(QDomElement &document,
 											   QStringLiteral("cabinetLayoutReference"))) {
 		auto *layout_reference = new CabinetLayoutReferenceItem(QUuid(), false);
 		addItem(layout_reference);
-		if (!layout_reference->fromXml(ref_xml)) {
-			removeItem(layout_reference);
-			delete layout_reference;
-			continue;
-		}
+		layout_reference->fromXml(ref_xml);
 		added_layout_references << layout_reference;
 											   }
 
@@ -1700,6 +1696,10 @@ void Diagram::refreshContents()
 
 	for (auto &strip :std::as_const(dc_.m_terminal_strip)) {
 		strip->refreshPending();
+	}
+
+	for (auto &reference : std::as_const(dc_.m_layout_references)) {
+		reference->linkToSource(project());
 	}
 }
 

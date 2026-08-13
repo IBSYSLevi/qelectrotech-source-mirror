@@ -18,15 +18,16 @@
 
 #include "cabinetlayoutsourcemodel.h"
 
-#include "../../qetproject.h"
 #include "../projectdatabase.h"
-#include "cabinetlayoutreferenceitem.h"
+#include "../../qetproject.h"
+#include "../../diagram.h"
+#include "../../qetgraphicsitem/cabinetlayoutreferenceitem.h"
 
-#include <QBrush>
-#include <QFont>
-#include <QMimeData>
-#include <QSqlError>
 #include <QSqlQuery>
+#include <QSqlError>
+#include <QMimeData>
+#include <QFont>
+#include <QBrush>
 
 const QString CabinetLayoutSourceModel::CABINET_LAYOUT_SOURCE_MIME_TYPE =
 		QStringLiteral("application/x-qet-cabinet-layout-uuid");
@@ -55,8 +56,6 @@ CabinetLayoutSourceModel::CabinetLayoutSourceModel(QETProject *project, QObject 
 		connect(m_project, &QETProject::diagramAdded,
 				this, [this](QETProject *, Diagram *dia) { connectDiagram(dia); });
 	}
-
-	reload();
 }
 
 /**
@@ -95,7 +94,6 @@ void CabinetLayoutSourceModel::connectDiagram(Diagram *diagram)
 */
 void CabinetLayoutSourceModel::reload()
 {
-	qWarning() << "CabinetLayoutSourceModel::reload CALLED";
 
 	removeRows(0, rowCount());
 

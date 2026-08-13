@@ -23,8 +23,10 @@
 
 #include <QUuid>
 #include <QFont>
+#include <QPointer>
 
 class QETProject;
+class Element;
 
 /**
 	@brief The CabinetLayoutReferenceItem class
@@ -48,13 +50,24 @@ class QETProject;
 	  size is entirely computed from the source device's
 	  width/height/depth and the folio's scale.
 
-	The item stores only what can't be recomputed: the source
-	element's UUID, its own position and rotation on this folio, and
-	which view (front/side) it represents. Everything else --
-	label, current dimensions -- is looked up fresh from the project
-	database each time it's needed (@see refreshFromSource), the same
-	"don't cache what you can look up" principle already used by
-	CabinetLayoutSourceModel.
+	Linking works exactly like Master/Slave elements
+	(@see Element::initLink(), SlaveElement::linkToElement()): the
+	source is looked up once, via ElementProvider (a direct search of
+	live Element objects already in the project's diagrams, not a SQL
+	round-trip -- QET's own established pattern for "resolve a stored
+	UUID reference once the whole project has finished loading").
+	There is no automatic retry after that; a reference whose source
+	can't be found stays orphaned (@see isOrphaned()) until the next
+	full reload (closing and reopening the project), matching how
+	Element::initLink() itself only ever attempts once per load.
+
+	Because of that "only once" contract, what's needed to still show
+	something sensible for an orphaned reference -- the source's last
+	known label and real-world width/height in mm -- is cached
+	directly in this item's own toXml()/fromXml(), rather than only
+	looked up live. Once successfully linked, this cache is kept
+	genuinely live via Element::elementInfoChange, so a save always
+	persists the current state, not a stale snapshot.
 */
 
 class CabinetLayoutReferenceItem : public QetGraphicsItem
@@ -80,21 +93,37 @@ class CabinetLayoutReferenceItem : public QetGraphicsItem
 
 		QUuid sourceElementUuid() const { return m_source_element_uuid; }
 		bool isSideView() const { return m_is_side_view; }
+		bool isOrphaned() const { return m_is_orphaned; }
 
 		/**
-			@brief refreshFromSource
-			Re-reads the current label/width/height/depth for
-			sourceElementUuid() from the project database and
-			recomputes this item's on-screen size accordingly.
-			Called once right after construction, and again whenever
-			the source element's own data changes
-			(@see CabinetLayoutReferenceWatcher).
-			@return false if the source element could no longer be
-			found in the project database (e.g. it was deleted) --
-			callers should then remove this item rather than leave a
-			reference pointing at nothing.
+			@brief linkToSource
+			Attempts, once, to find the live Element matching
+			sourceElementUuid() (via ElementProvider -- a direct search
+			of the project's already-loaded diagrams, no database
+			involved) and connect to it for live updates. Called from
+			Diagram::refreshContents() (matching where
+			Element::initLink() itself is called from) after a fresh
+			project load, and directly at drop time when a new
+			reference is created interactively (@see
+			DiagramEventAddCabinetLayoutReference), since the source is
+			always already live in the scene in that case.
+
+			On success: caches the source's current label/width/height,
+			connects to its elementInfoChange (further edits stay live)
+			and to its destruction (so this reference becomes orphaned
+			again if the source is later deleted), and clears
+			isOrphaned().
+
+			On failure: leaves the item showing its last cached
+			label/size (@see toXml()/fromXml()) and marks isOrphaned().
+			Does not remove the item -- an orphaned reference is a
+			visible, actionable state, not silently dropped, and the
+			user may still want to delete it manually or wait for the
+			source to reappear (e.g. undoing its deletion) before the
+			next reload.
+			@param project the project to search for the source element
 		*/
-		bool refreshFromSource();
+		void linkToSource(QETProject *project);
 
 		/**
 			@brief jumpToSource
@@ -122,20 +151,47 @@ class CabinetLayoutReferenceItem : public QetGraphicsItem
 			an already-placed device in the source tree
 			(@see CabinetLayoutSourceModel).
 		*/
-	static bool existsReferenceFor(QETProject *project,
-									const QUuid &source_element_uuid,
-									bool is_side_view);
+		static bool existsReferenceFor(QETProject *project,
+										const QUuid &source_element_uuid,
+										bool is_side_view);
 
 	protected:
 		void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
 
+	private slots:
+		/**
+			@brief onSourceInfoChanged
+			Connected to the linked source Element's elementInfoChange.
+			Re-reads label/width/height/depth directly from the
+			(already-held) source element -- no database round-trip --
+			and recomputes this item's cached values and on-screen size.
+		*/
+		void onSourceInfoChanged();
+
+		/**
+			@brief onSourceDestroyed
+			Connected to the linked source Element's destroyed(). Marks
+			this reference orphaned again; its last cached label/size
+			stay visible (@see isOrphaned()).
+		*/
+		void onSourceDestroyed();
+
 	private:
 		void rebuildFont();
+		void applyElementData(Element *element);
+		void recomputeBoxSize();
 
 		QUuid m_source_element_uuid;
 		bool m_is_side_view;
+		bool m_is_orphaned = true;
+
+		QPointer<Element> m_source_element;
 
 		QString m_label;
+		qreal m_real_width_mm  = 0.0; //whichever of the source's width/depth
+									   //applies for m_is_side_view
+		qreal m_real_height_mm = 0.0;
+
 		qreal m_box_width  = 100;
 		qreal m_box_height = 100;
 		QFont m_font;

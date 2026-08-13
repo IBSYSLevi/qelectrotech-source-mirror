@@ -24,6 +24,7 @@
 
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsView>
+#include <QRectF>
 
 /**
 	@brief DiagramEventAddCabinetLayoutReference::DiagramEventAddCabinetLayoutReference
@@ -42,14 +43,9 @@ DiagramEventAddCabinetLayoutReference::DiagramEventAddCabinetLayoutReference(
 {
 	auto *item = new CabinetLayoutReferenceItem(source_element_uuid, is_side_view);
 	m_diagram->addItem(item);
+	item->linkToSource(m_diagram->project());
 
-	if (!item->refreshFromSource()) {
-			//Source element not found (e.g. deleted between the drag
-			//starting and the drop) -- nothing to place. Leave
-			//m_running false; the caller checks isRunning() and must
-			//not hand this interface to Diagram::setEventInterface()
-			//(see class comment for why finish() can't be relied on
-			//here to signal that back).
+	if (item->isOrphaned()) {
 		m_diagram->removeItem(item);
 		delete item;
 		return;

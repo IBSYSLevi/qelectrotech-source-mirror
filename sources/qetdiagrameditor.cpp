@@ -2016,6 +2016,11 @@ void QETDiagramEditor::addProjectView(ProjectView *project_view)
 		}
 	});
 
+	connect(project_view, &ProjectView::diagramActivated, this, [this](DiagramView *dv) {
+		if (m_cabinet_layout_source_widget)
+			m_cabinet_layout_source_widget->setActiveDiagram(dv ? dv->diagram() : nullptr);
+	});
+
 		//Highlight the current page in projectView on project activation
 	connect(this, &QETDiagramEditor::syncElementsPanel, this, [this]() {
 		if (pa && currentDiagramView()) {
