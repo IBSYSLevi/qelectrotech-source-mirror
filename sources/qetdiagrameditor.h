@@ -19,6 +19,7 @@
 #define QET_DIAGRAM_EDITOR_H
 
 #include "SearchAndReplace/ui/searchandreplacewidget.h"
+#include "cabinetlayoutsourcewidget.h"
 #include "qetmainwindow.h"
 
 #include <QActionGroup>
@@ -82,6 +83,7 @@ class QETDiagramEditor : public QETMainWindow
 		QETDiagramEditor(const QETDiagramEditor &);
 		void setUpElementsPanel ();
 		void setUpElementsCollectionWidget();
+		void setUpCabinetLayoutSourceWidget();
 		void setUpUndoStack     ();
 		void setUpSelectionPropertiesEditor();
 		void setUpAutonumberingWidget();
@@ -238,9 +240,12 @@ class QETDiagramEditor : public QETMainWindow
 		QDockWidget
 		*qdw_pa, /// Dock for the elements panel
 		*m_qdw_elmt_collection,
+		*m_qdw_cabinet_layout_source,
 		*qdw_undo; /// Dock for the undo list
 
 		ElementsCollectionWidget *m_element_collection_widget;
+
+		CabinetLayoutSourceWidget *m_cabinet_layout_source_widget = nullptr;
 			
 		DiagramPropertiesEditorDockWidget *m_selection_properties_editor;
 			/// Elements panel
