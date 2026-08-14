@@ -20,7 +20,6 @@
 #include "../../qetapp.h"
 #include "../../qetinformation.h"
 #include "ui_elementpropertieseditorwidget.h"
-#include "../../qetinformation.h"
 
 #include <QItemDelegate>
 #include <QComboBox>
@@ -64,9 +63,21 @@ class EditorDelegate : public QItemDelegate
 	{
 		if(index.column() == 1)
 		{
-			return QItemDelegate::createEditor(parent,
-							   option,
-							   index);
+			const QString key = index.sibling(index.row(), 0)
+									.data(Qt::UserRole).toString();
+
+			if (key == QETInformation::ELMT_WIDTH || key == QETInformation::ELMT_HEIGHT || key == QETInformation::ELMT_DEPTH)
+			{
+				auto *line_edit = new QLineEdit(parent);
+				auto *validator = new QRegularExpressionValidator(
+					QETInformation::numericInfoPattern(), line_edit);
+				line_edit->setValidator(validator);
+				line_edit->setPlaceholderText(tr("ex. 80.5"));
+				line_edit->setToolTip(tr("Nombre décimal avec un point comme séparateur (ex. 80.5)"));
+				return line_edit;
+			}
+
+			return QItemDelegate::createEditor(parent, option, index);
 		}
 		return nullptr;
 	}
