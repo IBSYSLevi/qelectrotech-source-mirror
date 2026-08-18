@@ -23,6 +23,7 @@
 
 #include <QUuid>
 #include <QPointF>
+#include <QKeyEvent>
 
 class CabinetLayoutReferenceItem;
 
@@ -75,8 +76,9 @@ class DiagramEventAddCabinetLayoutReference : public DiagramEventInterface
 											   const QPointF &initial_pos);
 		~DiagramEventAddCabinetLayoutReference() override;
 
-		void mousePressEvent   (QGraphicsSceneMouseEvent *event) override;
-		void mouseMoveEvent    (QGraphicsSceneMouseEvent *event) override;
+		void mousePressEvent	(QGraphicsSceneMouseEvent *event) override;
+		void mouseMoveEvent		(QGraphicsSceneMouseEvent *event) override;
+		void keyPressEvent		(QKeyEvent *event) override;
 		void init() override;
 
 	private:

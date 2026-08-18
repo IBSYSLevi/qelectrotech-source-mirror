@@ -127,6 +127,24 @@ void DiagramEventAddCabinetLayoutReference::mouseMoveEvent(QGraphicsSceneMouseEv
 }
 
 /**
+	@brief DiagramEventAddCabinetLayoutReference::keyPressEvent
+	Press space key rotate the box to 90° (return true)
+	else call DiagramEventInterface::keyPressEvent(event), and return the value.
+	@param event
+*/
+void DiagramEventAddCabinetLayoutReference::keyPressEvent(QKeyEvent *event)
+{
+	if (m_reference_item && event->key() == Qt::Key_Space)
+	{
+		m_reference_item->setRotation(m_reference_item->rotation() + 90);
+		event->setAccepted(true);
+	}
+	else {
+		DiagramEventInterface::keyPressEvent(event);
+	}
+}
+
+/**
 	@brief DiagramEventAddCabinetLayoutReference::snapToNearbyReferenceEdges
 	@param pos the box's candidate top-left position (its own
 	pos()/boundingRect() origin, not the cursor position -- caller is
