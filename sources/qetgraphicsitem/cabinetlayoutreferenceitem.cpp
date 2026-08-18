@@ -47,9 +47,23 @@ CabinetLayoutReferenceItem::~CabinetLayoutReferenceItem()
 {
 }
 
+/**
+	@brief CabinetLayoutReferenceItem::setPos
+	Bypasses QetGraphicsItem::setPos()'s automatic snap-to-grid --
+	this item has its own, purpose-built snapping
+	(snapToNearbyReferenceEdges(), computed by the caller before this
+	is ever invoked), which the base class's coarse grid-snap would
+	otherwise silently override on every single call.
+	@param p
+*/
+void CabinetLayoutReferenceItem::setPos(const QPointF &p)
+{
+	QGraphicsItem::setPos(p);
+}
+
 QRectF CabinetLayoutReferenceItem::boundingRect() const
 {
-	return QRectF(0, 0, m_box_width, m_box_height);
+	return QRectF(-m_box_width / 2, -m_box_height / 2, m_box_width, m_box_height);
 }
 
 /**
@@ -117,12 +131,7 @@ void CabinetLayoutReferenceItem::paint(
 
 	const bool is_narrow = m_box_width < m_box_height;
 	if (is_narrow) {
-			//Scoped in its own save()/restore(): translate()/rotate()
-			//must not leak into the selection-highlight rect drawn
-			//below, or that rect ends up shifted and reshaped by the
-			//same transform as the rotated text.
 		painter->save();
-		painter->translate(boundingRect().center());
 		painter->rotate(270);
 		QRectF rotated_rect(-m_box_height / 2, -m_box_width / 2,
 							 m_box_height, m_box_width);

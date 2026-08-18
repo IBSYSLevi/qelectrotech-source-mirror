@@ -82,6 +82,7 @@ class CabinetLayoutReferenceItem : public QetGraphicsItem
 
 		enum { Type = UserType + 1012 };
 		int type() const override { return Type; }
+		void setPos(const QPointF &p) override;
 
 		QRectF boundingRect() const override;
 		void paint(QPainter *painter,
