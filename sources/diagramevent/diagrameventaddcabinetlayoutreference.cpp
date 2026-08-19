@@ -44,6 +44,7 @@ DiagramEventAddCabinetLayoutReference::DiagramEventAddCabinetLayoutReference(
 	auto *item = new CabinetLayoutReferenceItem(source_element_uuid, is_side_view);
 	m_diagram->addItem(item);
 	item->linkToSource(m_diagram->project());
+	item->fitFontSizeToBox();
 
 	if (item->isOrphaned()) {
 		m_diagram->removeItem(item);

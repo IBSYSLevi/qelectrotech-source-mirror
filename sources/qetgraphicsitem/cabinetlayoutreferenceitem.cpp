@@ -67,19 +67,20 @@ QRectF CabinetLayoutReferenceItem::boundingRect() const
 }
 
 /**
-	@brief CabinetLayoutReferenceItem::rebuildFont
-	Shrinks the font for a narrow box so the label has a realistic
-	chance of fitting across its short axis; mirrors the sizing rule
-	previously used by CabinetLayoutBoxFactory's generated dynamic_text.
+	@brief fitFontSizeToBox
+	Computes and sets a font point size that fits within the
+	box's current dimensions. Called exactly once, only at the
+	moment a brand-new box is interactively created (@see
+	DiagramEventAddCabinetLayoutReference's constructor) --
+	never from recomputeBoxSize() itself, since that also runs
+	for boxes loaded from file (whose font was already read
+	from XML and must not be recalculated) and for live updates
+	to an already-placed box's source device.
 */
-void CabinetLayoutReferenceItem::rebuildFont()
+void CabinetLayoutReferenceItem::fitFontSizeToBox()
 {
-	const bool is_narrow = m_box_width < m_box_height;
-	const qreal cross_axis = is_narrow ? m_box_width : m_box_height;
-	const int font_size = is_narrow
-			? qBound(4, int(cross_axis / 8), 7)
-			: 7;
-	m_font.setPointSize(font_size);
+	const int size = qBound(4, int(qMin(m_box_width, m_box_height) / 8), 7);
+	m_font.setPointSize(size);
 }
 
 /**
@@ -103,7 +104,6 @@ void CabinetLayoutReferenceItem::recomputeBoxSize()
 	m_box_width  = (m_real_width_mm  > 0.0) ? m_real_width_mm  * scale : 20.0;
 	m_box_height = (m_real_height_mm > 0.0) ? m_real_height_mm * scale : 20.0;
 
-	rebuildFont();
 	update();
 }
 
@@ -116,12 +116,14 @@ void CabinetLayoutReferenceItem::paint(
 
 	painter->save();
 
-	QPen pen(m_is_orphaned ? Qt::red : Qt::black);
-	pen.setCosmetic(true);
-	if (m_is_orphaned)
+	QPen pen = m_pen;
+	if (m_is_orphaned) {
+		pen.setColor(Qt::red);
 		pen.setStyle(Qt::DashLine);
+	}
+	pen.setCosmetic(true);
 	painter->setPen(pen);
-	painter->setBrush(QColor(200, 200, 200, 65));
+	painter->setBrush(m_brush);
 	painter->drawRect(boundingRect());
 
 	painter->setFont(m_font);
@@ -129,22 +131,18 @@ void CabinetLayoutReferenceItem::paint(
 			? QStringLiteral("⚠ ") + m_label
 			: m_label;
 
-	const bool is_narrow = m_box_width < m_box_height;
-	if (is_narrow) {
-		painter->save();
-		painter->rotate(270);
-		QRectF rotated_rect(-m_box_height / 2, -m_box_width / 2,
-							 m_box_height, m_box_width);
-		painter->drawText(rotated_rect, Qt::AlignCenter, display_label);
-		painter->restore();
-	} else {
-		painter->drawText(boundingRect(), Qt::AlignCenter, display_label);
-	}
+	painter->save();
+	painter->rotate(m_text_rotation);
+	const qreal longest_side = qMax(m_box_width, m_box_height);
+	QRectF text_rect(-longest_side / 2, -longest_side / 2, longest_side, longest_side);
+	painter->drawText(text_rect, Qt::AlignCenter, display_label);
+	painter->restore();
 
 	if (isSelected() || isHovered()) {
-		pen.setStyle(Qt::DashLine);
-		pen.setColor(Qt::blue);
-		painter->setPen(pen);
+		QPen sel_pen(Qt::blue);
+		sel_pen.setStyle(Qt::DashLine);
+		sel_pen.setCosmetic(true);
+		painter->setPen(sel_pen);
 		painter->setBrush(Qt::NoBrush);
 		painter->drawRect(boundingRect().adjusted(1, 1, -1, -1));
 	}
@@ -161,7 +159,12 @@ void CabinetLayoutReferenceItem::paint(
 */
 void CabinetLayoutReferenceItem::applyElementData(Element *element)
 {
-	m_label = element->actualLabel();
+	if (m_displayed_info_key == QLatin1String("label")) {
+		m_label = element->actualLabel();
+	} else {
+		m_label = element->elementInformations()
+				.value(m_displayed_info_key).toString();
+	}
 	if (m_label.isEmpty())
 		m_label = QObject::tr("(sans label)");
 
@@ -175,6 +178,15 @@ void CabinetLayoutReferenceItem::applyElementData(Element *element)
 	m_real_height_mm = h_ok ? height_mm : 0.0;
 
 	recomputeBoxSize();
+}
+
+void CabinetLayoutReferenceItem::setDisplayedInfoKey(const QString &key)
+{
+	m_displayed_info_key = key;
+	if (m_source_element)
+		applyElementData(m_source_element.data());
+	else
+		update();
 }
 
 /**
@@ -308,6 +320,12 @@ QDomElement CabinetLayoutReferenceItem::toXml(QDomDocument &document) const
 	element.setAttribute(QStringLiteral("last_known_label"), m_label);
 	element.setAttribute(QStringLiteral("last_known_width_mm"), QString::number(m_real_width_mm));
 	element.setAttribute(QStringLiteral("last_known_height_mm"), QString::number(m_real_height_mm));
+	element.setAttribute(QStringLiteral("pen_color"), m_pen.color().name());
+	element.setAttribute(QStringLiteral("pen_width"), QString::number(m_pen.widthF()));
+	element.setAttribute(QStringLiteral("brush_color"), m_brush.color().name(QColor::HexArgb));
+	element.setAttribute(QStringLiteral("text_rotation"), QString::number(m_text_rotation));
+	element.setAttribute(QStringLiteral("font"), m_font.toString());
+	element.setAttribute(QStringLiteral("displayed_info_key"), m_displayed_info_key);
 	return element;
 }
 
@@ -339,6 +357,15 @@ bool CabinetLayoutReferenceItem::fromXml(const QDomElement &dom_element)
 		m_label = QObject::tr("(sans label)");
 	m_real_width_mm  = dom_element.attribute(QStringLiteral("last_known_width_mm")).toDouble();
 	m_real_height_mm = dom_element.attribute(QStringLiteral("last_known_height_mm")).toDouble();
+
+	m_pen.setColor(QColor(dom_element.attribute(QStringLiteral("pen_color"), QStringLiteral("#000000"))));
+	m_pen.setWidthF(dom_element.attribute(QStringLiteral("pen_width"), QStringLiteral("1")).toDouble());
+	m_brush.setColor(QColor(dom_element.attribute(QStringLiteral("brush_color"), QStringLiteral("#41c8c8c8"))));
+	m_brush.setStyle(Qt::SolidPattern);
+	m_text_rotation = dom_element.attribute(QStringLiteral("text_rotation"), QStringLiteral("270")).toDouble();
+	QFont f; f.fromString(dom_element.attribute(QStringLiteral("font"), m_font.toString()));
+	m_font = f;
+	m_displayed_info_key = dom_element.attribute(QStringLiteral("displayed_info_key"), QStringLiteral("label"));
 
 	m_is_orphaned = true; //until linkToSource() says otherwise
 	recomputeBoxSize();
