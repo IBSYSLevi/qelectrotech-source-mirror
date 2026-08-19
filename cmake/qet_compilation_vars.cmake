@@ -89,6 +89,7 @@ set(QET_RES_FILES
   ${QET_DIR}/sources/ui/alignmenttextdialog.ui
   ${QET_DIR}/sources/ui/bomexportdialog.ui
   ${QET_DIR}/sources/ui/borderpropertieswidget.ui
+  ${QET_DIR}/sources/ui/cabinetlayoutreferencepropertieswidget.ui
   ${QET_DIR}/sources/ui/compositetexteditdialog.ui
   ${QET_DIR}/sources/ui/conductorpropertiesdialog.ui
   ${QET_DIR}/sources/ui/conductorpropertieswidget.ui
@@ -677,6 +678,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/ui/bomexportdialog.h
   ${QET_DIR}/sources/ui/borderpropertieswidget.cpp
   ${QET_DIR}/sources/ui/borderpropertieswidget.h
+  ${QET_DIR}/sources/ui/cabinetlayoutreferencepropertieswidget.cpp
+  ${QET_DIR}/sources/ui/cabinetlayoutreferencepropertieswidget.h
   ${QET_DIR}/sources/ui/compositetexteditdialog.cpp
   ${QET_DIR}/sources/ui/compositetexteditdialog.h
   ${QET_DIR}/sources/ui/contactgroupselectiondialog.cpp

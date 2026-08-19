@@ -21,9 +21,10 @@
 
 #include "qetgraphicsitem.h"
 
-#include <QUuid>
 #include <QFont>
+#include <QPen>
 #include <QPointer>
+#include <QUuid>
 
 class QETProject;
 class Element;
@@ -73,6 +74,11 @@ class Element;
 class CabinetLayoutReferenceItem : public QetGraphicsItem
 {
 	Q_OBJECT
+	Q_PROPERTY(QPen pen READ pen WRITE setPen)
+	Q_PROPERTY(QBrush brush READ brush WRITE setBrush)
+	Q_PROPERTY(qreal textRotation READ textRotation WRITE setTextRotation)
+	Q_PROPERTY(QFont font READ font WRITE setFont)
+	Q_PROPERTY(QString displayedInfoKey READ displayedInfoKey WRITE setDisplayedInfoKey)
 
 	public:
 		explicit CabinetLayoutReferenceItem(const QUuid &source_element_uuid,
@@ -82,8 +88,10 @@ class CabinetLayoutReferenceItem : public QetGraphicsItem
 
 		enum { Type = UserType + 1012 };
 		int type() const override { return Type; }
+		void setPos(const QPointF &p) override;
 
 		QRectF boundingRect() const override;
+		void fitFontSizeToBox();
 		void paint(QPainter *painter,
 				   const QStyleOptionGraphicsItem *options,
 				   QWidget *widget = nullptr) override;
@@ -94,6 +102,17 @@ class CabinetLayoutReferenceItem : public QetGraphicsItem
 		QUuid sourceElementUuid() const { return m_source_element_uuid; }
 		bool isSideView() const { return m_is_side_view; }
 		bool isOrphaned() const { return m_is_orphaned; }
+
+		QPen pen() const { return m_pen; }
+		void setPen(const QPen &pen) { m_pen = pen; update(); }
+		QBrush brush() const { return m_brush; }
+		void setBrush(const QBrush &brush) { m_brush = brush; update(); }
+		qreal textRotation() const { return m_text_rotation; }
+		void setTextRotation(qreal angle) { m_text_rotation = angle; update(); }
+		QFont font() const { return m_font; }
+		void setFont(const QFont &font) { m_font = font; update(); }
+		QString displayedInfoKey() const { return m_displayed_info_key; }
+		void setDisplayedInfoKey(const QString &key);
 
 		/**
 			@brief linkToSource
@@ -177,7 +196,6 @@ class CabinetLayoutReferenceItem : public QetGraphicsItem
 		void onSourceDestroyed();
 
 	private:
-		void rebuildFont();
 		void applyElementData(Element *element);
 		void recomputeBoxSize();
 
@@ -188,13 +206,17 @@ class CabinetLayoutReferenceItem : public QetGraphicsItem
 		QPointer<Element> m_source_element;
 
 		QString m_label;
-		qreal m_real_width_mm  = 0.0; //whichever of the source's width/depth
-									   //applies for m_is_side_view
+		qreal m_real_width_mm  = 0.0;
 		qreal m_real_height_mm = 0.0;
 
 		qreal m_box_width  = 100;
 		qreal m_box_height = 100;
-		QFont m_font;
+
+		QPen m_pen { QColor(Qt::black), 1.0 };
+		QBrush m_brush { QColor(200, 200, 200, 65) };
+		qreal m_text_rotation = 270;
+		QString m_displayed_info_key = QStringLiteral("label");
+		QFont m_font { QStringLiteral("Sans Serif"), 7 };
 };
 
 #endif // CABINETLAYOUTREFERENCEITEM_H

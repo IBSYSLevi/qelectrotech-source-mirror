@@ -2588,7 +2588,8 @@ bool Diagram::canRotateSelection() const
 			qgi->type() == ConductorTextItem::Type ||
 			qgi->type() == DiagramImageItem::Type ||
 			qgi->type() == Element::Type ||
-			qgi->type() == DynamicElementTextItem::Type)
+			qgi->type() == DynamicElementTextItem::Type ||
+			qgi->type() == CabinetLayoutReferenceItem::Type)
 			return true;
 
 		if(qgi->type() == QGraphicsItemGroup::Type)
