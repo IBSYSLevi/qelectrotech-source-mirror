@@ -17,34 +17,39 @@
 */
 #include "elementpropertieseditorwidget.h"
 
+#include "../../elementdialog.h"
+#include "../../factory/elementpicturefactory.h"
 #include "../../qetapp.h"
 #include "../../qetinformation.h"
 #include "ui_elementpropertieseditorwidget.h"
-#include "../../qetinformation.h"
 
-#include <QItemDelegate>
-#include <QComboBox>
-#include <QSpinBox>
-#include <QSignalBlocker>
-#include <QTableWidgetItem>
-#include <QHeaderView>
-#include <QScrollBar>
-#include <QWheelEvent>
-#include <QTableWidget>
-#include <QCheckBox>
-#include <QGroupBox>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QLabel>
-#include <QPushButton>
-#include <QClipboard>
 #include <QApplication>
-#include <QFontDialog>
+#include <QCheckBox>
+#include <QClipboard>
+#include <QComboBox>
+#include <QFileDialog>
 #include <QFont>
+#include <QFontDialog>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QHeaderView>
+#include <QItemDelegate>
+#include <QLabel>
 #include <QLineEdit>
-#include <QSplitter>
-#include <QShortcut>
 #include <QMenu>
+#include <QPainter>
+#include <QPicture>
+#include <QPushButton>
+#include <QScrollBar>
+#include <QShortcut>
+#include <QSignalBlocker>
+#include <QSpinBox>
+#include <QSplitter>
+#include <QTableWidget>
+#include <QTableWidgetItem>
+#include <QVBoxLayout>
+#include <QWheelEvent>
+#include <qsvgrenderer.h>
 
 /**
 	@brief The EditorDelegate class
@@ -83,6 +88,7 @@ ElementPropertiesEditorWidget::ElementPropertiesEditorWidget(ElementData data, Q
 	m_data(data)
 {
 	ui->setupUi(this);
+	setUpReferenceMenus();
 	setUpInterface();
 	upDateInterface();
 }
@@ -401,6 +407,153 @@ void ElementPropertiesEditorWidget::on_m_buttonBox_accepted()
 	}
 	
 	this->close();
+}
+
+/**
+	@brief ElementPropertiesEditorWidget::setUpReferenceMenus
+	Wires the two "Parcourir…" tool buttons to a small popup menu
+	offering either a direct file (SVG/PNG/JPEG) or an element picked
+	from the collection. QToolButton::InstantPopup means every click
+	shows the menu -- deliberately, since we always want the user to
+	choose explicitly between the two rather than defaulting to one.
+*/
+void ElementPropertiesEditorWidget::setUpReferenceMenus()
+{
+	auto *layout_menu = new QMenu(this);
+	layout_menu->addAction(tr("Fichier…"), this, &ElementPropertiesEditorWidget::onLayoutReferencePickFile);
+	layout_menu->addAction(tr("Élément…"), this, &ElementPropertiesEditorWidget::onLayoutReferencePickElement);
+	ui->m_layout_reference_browse_pb->setMenu(layout_menu);
+
+	auto *principle_menu = new QMenu(this);
+	principle_menu->addAction(tr("Fichier…"), this, &ElementPropertiesEditorWidget::onPrincipleReferencePickFile);
+	principle_menu->addAction(tr("Élément…"), this, &ElementPropertiesEditorWidget::onPrincipleReferencePickElement);
+	ui->m_principle_reference_browse_pb->setMenu(principle_menu);
+}
+
+QPixmap ElementPropertiesEditorWidget::renderReferencePreview(const QByteArray &data, const QString &format) const
+{
+	const QSize target_size(48, 48);
+	if (data.isEmpty())
+		return QPixmap();
+
+	if (format == QLatin1String("svg"))
+	{
+		QSvgRenderer renderer(data);
+		QPixmap pixmap(target_size);
+		pixmap.fill(Qt::transparent);
+		QPainter painter(&pixmap);
+		renderer.render(&painter, pixmap.rect());
+		return pixmap;
+	}
+
+	QPixmap pixmap;
+	pixmap.loadFromData(data);
+	return pixmap.scaled(target_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+}
+
+void ElementPropertiesEditorWidget::onLayoutReferencePickFile()
+{
+	const QString path = QFileDialog::getOpenFileName(
+		this,
+		tr("Choisir une référence de disposition"),
+		QString(),
+		tr("Images (*.svg *.png *.jpg *.jpeg)"));
+
+	if (path.isEmpty())
+		return;
+
+	QFile file(path);
+	if (!file.open(QIODevice::ReadOnly))
+		return;
+
+	m_layout_reference_element = ElementsLocation();  //clears any previous element pick
+	m_layout_reference_data = file.readAll();
+	m_layout_reference_format = QFileInfo(path).suffix().toLower();
+
+	ui->m_layout_reference_status_lbl->setText(QFileInfo(path).fileName());
+	ui->m_layout_reference_preview_lbl->setPixmap(
+		renderReferencePreview(m_layout_reference_data, m_layout_reference_format));
+}
+
+/**
+	@brief ElementPropertiesEditorWidget::onLayoutReferencePickElement
+	Selection only -- no SVG is generated from the picked element yet.
+	The preview reuses ElementPictureFactory::pixmap() purely for
+	visual confirmation of what was picked; it is not stored as the
+	actual reference data.
+*/
+void ElementPropertiesEditorWidget::onLayoutReferencePickElement()
+{
+	ElementsLocation loc = ElementDialog::getOpenElementLocation(this);
+	if (!loc.exist())
+		return;
+
+	m_layout_reference_data.clear();     //clears any previous direct-file pick
+	m_layout_reference_format.clear();
+	m_layout_reference_element = loc;
+
+	ui->m_layout_reference_status_lbl->setText(loc.name());
+	ui->m_layout_reference_preview_lbl->setPixmap(
+		ElementPictureFactory::instance()->pixmap(loc).scaled(
+			48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+}
+
+void ElementPropertiesEditorWidget::on_m_layout_reference_clear_pb_clicked()
+{
+	m_layout_reference_data.clear();
+	m_layout_reference_format.clear();
+	m_layout_reference_element = ElementsLocation();
+	ui->m_layout_reference_status_lbl->setText(tr("Aucune"));
+	ui->m_layout_reference_preview_lbl->setPixmap(QPixmap());
+}
+
+void ElementPropertiesEditorWidget::onPrincipleReferencePickFile()
+{
+	const QString path = QFileDialog::getOpenFileName(
+		this,
+		tr("Choisir une référence de schéma de principe"),
+		QString(),
+		tr("Images (*.svg *.png *.jpg *.jpeg)"));
+
+	if (path.isEmpty())
+		return;
+
+	QFile file(path);
+	if (!file.open(QIODevice::ReadOnly))
+		return;
+
+	m_principle_reference_element = ElementsLocation();
+	m_principle_reference_data = file.readAll();
+	m_principle_reference_format = QFileInfo(path).suffix().toLower();
+
+	ui->m_principle_reference_status_lbl->setText(QFileInfo(path).fileName());
+	ui->m_principle_reference_preview_lbl->setPixmap(
+		renderReferencePreview(m_principle_reference_data, m_principle_reference_format));
+}
+
+void ElementPropertiesEditorWidget::onPrincipleReferencePickElement()
+{
+	ElementsLocation loc = ElementDialog::getOpenElementLocation(this);
+	if (!loc.exist())
+		return;
+
+	m_principle_reference_data.clear();
+	m_principle_reference_format.clear();
+	m_principle_reference_element = loc;
+
+	ui->m_principle_reference_status_lbl->setText(loc.name());
+	ui->m_principle_reference_preview_lbl->setPixmap(
+		ElementPictureFactory::instance()->pixmap(loc).scaled(
+			48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+}
+
+void ElementPropertiesEditorWidget::on_m_principle_reference_clear_pb_clicked()
+{
+	m_principle_reference_data.clear();
+	m_principle_reference_format.clear();
+	m_principle_reference_element = ElementsLocation();
+	ui->m_principle_reference_status_lbl->setText(tr("Aucune"));
+	ui->m_principle_reference_preview_lbl->setPixmap(QPixmap());
 }
 
 /**

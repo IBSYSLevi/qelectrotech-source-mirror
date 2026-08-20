@@ -20,6 +20,7 @@
 
 #include "../../diagramcontext.h"
 #include "../../properties/elementdata.h"
+#include "elementslocation.h"
 
 #include <QAbstractButton>
 #include <QDialog>
@@ -57,6 +58,8 @@ class ElementPropertiesEditorWidget : public QDialog
 		void setUpInterface();
 		void updateTree();
 		void populateTree();
+		QPixmap renderReferencePreview(const QByteArray &data, const QString &format) const;
+		void setUpReferenceMenus();
 		void populateSlaveGroupsTable();
 		void readSlaveGroupsFromTable();
 		void createPlcConfigWidgets();
@@ -69,6 +72,12 @@ class ElementPropertiesEditorWidget : public QDialog
 		void on_m_base_type_cb_currentIndexChanged(int index);
 		void on_m_slave_groups_checkbox_toggled(bool checked);
 		void on_max_slaves_checkbox_toggled(bool checked);
+		void onLayoutReferencePickFile();
+		void onLayoutReferencePickElement();
+		void on_m_layout_reference_clear_pb_clicked();
+		void onPrincipleReferencePickFile();
+		void onPrincipleReferencePickElement();
+		void on_m_principle_reference_clear_pb_clicked();
 		void plcAddRow();
 		void plcRemoveRow();
 		void plcPasteFromClipboard();
@@ -81,6 +90,14 @@ class ElementPropertiesEditorWidget : public QDialog
 	private:
 		Ui::ElementPropertiesEditorWidget *ui;
 		ElementData m_data;
+
+		// item reference
+		QByteArray      m_layout_reference_data;
+		QString         m_layout_reference_format;
+		ElementsLocation m_layout_reference_element;
+		QByteArray      m_principle_reference_data;
+		QString         m_principle_reference_format;
+		ElementsLocation m_principle_reference_element;
 
 		// PLC configuration widgets (created programmatically)
 		QGroupBox *m_plc_gb = nullptr;
