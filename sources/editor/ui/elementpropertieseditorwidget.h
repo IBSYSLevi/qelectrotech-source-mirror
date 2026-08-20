@@ -91,14 +91,6 @@ class ElementPropertiesEditorWidget : public QDialog
 		Ui::ElementPropertiesEditorWidget *ui;
 		ElementData m_data;
 
-		// item reference
-		QByteArray      m_layout_reference_data;
-		QString         m_layout_reference_format;
-		ElementsLocation m_layout_reference_element;
-		QByteArray      m_principle_reference_data;
-		QString         m_principle_reference_format;
-		ElementsLocation m_principle_reference_element;
-
 		// PLC configuration widgets (created programmatically)
 		QGroupBox *m_plc_gb = nullptr;
 		QTableWidget *m_plc_table = nullptr;

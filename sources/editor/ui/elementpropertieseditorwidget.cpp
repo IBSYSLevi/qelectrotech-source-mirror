@@ -37,6 +37,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMessageBox>
 #include <QPainter>
 #include <QPicture>
 #include <QPushButton>
@@ -47,6 +48,7 @@
 #include <QSplitter>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTreeWidgetItem>
 #include <QVBoxLayout>
 #include <QWheelEvent>
 #include <qsvgrenderer.h>
@@ -111,6 +113,34 @@ void ElementPropertiesEditorWidget::upDateInterface()
 	ui->m_base_type_cb->setCurrentIndex(
 				ui->m_base_type_cb->findData(
 					m_data.m_type));
+
+	if (m_data.m_layout_reference.source == QLatin1String("direct")) {
+		ui->m_layout_reference_status_lbl->setText(tr("(fichier intégré)"));
+		ui->m_layout_reference_preview_lbl->setPixmap(
+			renderReferencePreview(m_data.m_layout_reference.data, m_data.m_layout_reference.format));
+	} else if (m_data.m_layout_reference.source == QLatin1String("reference")) {
+		ElementsLocation loc(m_data.m_layout_reference.reference);
+		ui->m_layout_reference_status_lbl->setText(loc.name());
+		ui->m_layout_reference_preview_lbl->setPixmap(
+			ElementPictureFactory::instance()->pixmap(loc).scaled(48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+	} else {
+		ui->m_layout_reference_status_lbl->setText(tr("Aucune"));
+		ui->m_layout_reference_preview_lbl->setPixmap(QPixmap());
+	}
+
+	if (m_data.m_principle_schematic_reference.source == QLatin1String("direct")) {
+		ui->m_principle_reference_status_lbl->setText(tr("(fichier intégré)"));
+		ui->m_principle_reference_preview_lbl->setPixmap(
+			renderReferencePreview(m_data.m_principle_schematic_reference.data, m_data.m_principle_schematic_reference.format));
+	} else if (m_data.m_principle_schematic_reference.source == QLatin1String("reference")) {
+		ElementsLocation loc(m_data.m_principle_schematic_reference.reference);
+		ui->m_principle_reference_status_lbl->setText(loc.name());
+		ui->m_principle_reference_preview_lbl->setPixmap(
+			ElementPictureFactory::instance()->pixmap(loc).scaled(48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+	} else {
+		ui->m_principle_reference_status_lbl->setText(tr("Aucune"));
+		ui->m_principle_reference_preview_lbl->setPixmap(QPixmap());
+	}
 	
 	if (m_data.m_type == ElementData::Slave)
 	{
@@ -466,31 +496,34 @@ void ElementPropertiesEditorWidget::onLayoutReferencePickFile()
 	if (!file.open(QIODevice::ReadOnly))
 		return;
 
-	m_layout_reference_element = ElementsLocation();  //clears any previous element pick
-	m_layout_reference_data = file.readAll();
-	m_layout_reference_format = QFileInfo(path).suffix().toLower();
+	m_data.m_layout_reference.source = QStringLiteral("direct");
+	m_data.m_layout_reference.data = file.readAll();
+	m_data.m_layout_reference.format = QFileInfo(path).suffix().toLower();
+	m_data.m_layout_reference.reference.clear();
 
 	ui->m_layout_reference_status_lbl->setText(QFileInfo(path).fileName());
 	ui->m_layout_reference_preview_lbl->setPixmap(
-		renderReferencePreview(m_layout_reference_data, m_layout_reference_format));
+		renderReferencePreview(m_data.m_layout_reference.data, m_data.m_layout_reference.format));
 }
 
-/**
-	@brief ElementPropertiesEditorWidget::onLayoutReferencePickElement
-	Selection only -- no SVG is generated from the picked element yet.
-	The preview reuses ElementPictureFactory::pixmap() purely for
-	visual confirmation of what was picked; it is not stored as the
-	actual reference data.
-*/
 void ElementPropertiesEditorWidget::onLayoutReferencePickElement()
 {
 	ElementsLocation loc = ElementDialog::getOpenElementLocation(this);
 	if (!loc.exist())
 		return;
 
-	m_layout_reference_data.clear();     //clears any previous direct-file pick
-	m_layout_reference_format.clear();
-	m_layout_reference_element = loc;
+	if (loc.isProject())
+	{
+		QMessageBox::warning(this, tr("Référence invalide"),
+			tr("Un élément intégré à un projet ne peut pas être utilisé comme référence, "
+			   "car il ne serait plus accessible si ce projet n'est pas ouvert."));
+		return;
+	}
+
+	m_data.m_layout_reference.source = QStringLiteral("reference");
+	m_data.m_layout_reference.reference = loc.toString();
+	m_data.m_layout_reference.data.clear();
+	m_data.m_layout_reference.format.clear();
 
 	ui->m_layout_reference_status_lbl->setText(loc.name());
 	ui->m_layout_reference_preview_lbl->setPixmap(
@@ -500,9 +533,7 @@ void ElementPropertiesEditorWidget::onLayoutReferencePickElement()
 
 void ElementPropertiesEditorWidget::on_m_layout_reference_clear_pb_clicked()
 {
-	m_layout_reference_data.clear();
-	m_layout_reference_format.clear();
-	m_layout_reference_element = ElementsLocation();
+	m_data.m_layout_reference = ElementData::ReferenceData();
 	ui->m_layout_reference_status_lbl->setText(tr("Aucune"));
 	ui->m_layout_reference_preview_lbl->setPixmap(QPixmap());
 }
@@ -522,13 +553,14 @@ void ElementPropertiesEditorWidget::onPrincipleReferencePickFile()
 	if (!file.open(QIODevice::ReadOnly))
 		return;
 
-	m_principle_reference_element = ElementsLocation();
-	m_principle_reference_data = file.readAll();
-	m_principle_reference_format = QFileInfo(path).suffix().toLower();
+	m_data.m_principle_schematic_reference.source = QStringLiteral("direct");
+	m_data.m_principle_schematic_reference.data = file.readAll();
+	m_data.m_principle_schematic_reference.format = QFileInfo(path).suffix().toLower();
+	m_data.m_principle_schematic_reference.reference.clear();
 
 	ui->m_principle_reference_status_lbl->setText(QFileInfo(path).fileName());
 	ui->m_principle_reference_preview_lbl->setPixmap(
-		renderReferencePreview(m_principle_reference_data, m_principle_reference_format));
+		renderReferencePreview(m_data.m_principle_schematic_reference.data, m_data.m_principle_schematic_reference.format));
 }
 
 void ElementPropertiesEditorWidget::onPrincipleReferencePickElement()
@@ -537,9 +569,18 @@ void ElementPropertiesEditorWidget::onPrincipleReferencePickElement()
 	if (!loc.exist())
 		return;
 
-	m_principle_reference_data.clear();
-	m_principle_reference_format.clear();
-	m_principle_reference_element = loc;
+	if (loc.isProject())
+	{
+		QMessageBox::warning(this, tr("Référence invalide"),
+			tr("Un élément intégré à un projet ne peut pas être utilisé comme référence, "
+			   "car il ne serait plus accessible si ce projet n'est pas ouvert."));
+		return;
+	}
+
+	m_data.m_layout_reference.source = QStringLiteral("reference");
+	m_data.m_layout_reference.reference = loc.toString();
+	m_data.m_layout_reference.data.clear();
+	m_data.m_layout_reference.format.clear();
 
 	ui->m_principle_reference_status_lbl->setText(loc.name());
 	ui->m_principle_reference_preview_lbl->setPixmap(
@@ -549,9 +590,7 @@ void ElementPropertiesEditorWidget::onPrincipleReferencePickElement()
 
 void ElementPropertiesEditorWidget::on_m_principle_reference_clear_pb_clicked()
 {
-	m_principle_reference_data.clear();
-	m_principle_reference_format.clear();
-	m_principle_reference_element = ElementsLocation();
+	m_data.m_principle_schematic_reference = ElementData::ReferenceData();
 	ui->m_principle_reference_status_lbl->setText(tr("Aucune"));
 	ui->m_principle_reference_preview_lbl->setPixmap(QPixmap());
 }
