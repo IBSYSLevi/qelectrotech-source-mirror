@@ -33,6 +33,8 @@
 #include <QTextDocument>
 #include <iostream>
 #include <algorithm>
+#include <QSvgGenerator>
+#include <QBuffer>
 
 ElementPictureFactory* ElementPictureFactory::m_factory = nullptr;
 
@@ -123,6 +125,45 @@ QPixmap ElementPictureFactory::pixmap(const ElementsLocation &location)
 	return QPixmap();
 }
 
+/**
+	@brief ElementPictureFactory::getSvg
+	@param location
+	@return an SVG rendering of the element at location, as raw file
+	bytes -- or an empty QByteArray if the element couldn't be built.
+*/
+QByteArray ElementPictureFactory::getSvg(const ElementsLocation &location)
+{
+	QUuid uuid = location.uuid();
+
+	if (!m_pictures_H.contains(uuid)) {
+		if (!build(location))
+			return QByteArray();
+	}
+
+	auto doc = location.pugiXml();
+	int w = doc.document_element().attribute("width").as_int();
+	int h = doc.document_element().attribute("height").as_int();
+	int hsx = doc.document_element().attribute("hotspot_x").as_int();
+	int hsy = doc.document_element().attribute("hotspot_y").as_int();
+
+	QByteArray svg_bytes;
+	QBuffer buffer(&svg_bytes);
+	buffer.open(QIODevice::WriteOnly);
+
+	QSvgGenerator generator;
+	generator.setOutputDevice(&buffer);
+	generator.setSize(QSize(w, h));
+	generator.setViewBox(QRect(0, 0, w, h));
+	generator.setTitle(location.name());
+
+	QPainter painter(&generator);
+	painter.setRenderHint(QPainter::Antialiasing, true);
+	painter.translate(hsx, hsy);
+	painter.drawPicture(0, 0, m_pictures_H.value(uuid));
+	painter.end();
+
+	return svg_bytes;
+}
 
 /**
 	@brief ElementPictureFactory::getPrimitives
