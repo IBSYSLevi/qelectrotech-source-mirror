@@ -320,6 +320,13 @@
             </property>
            </widget>
           </item>
+          <item row="0" column="5">
+           <widget class="QCheckBox" name="m_layout_reference_convert_cb">
+            <property name="text">
+             <string>Convertir en SVG</string>
+            </property>
+           </widget>
+          </item>
           <item row="1" column="0">
            <widget class="QLabel" name="label_principle_reference">
             <property name="text">
@@ -375,6 +382,13 @@
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="5">
+           <widget class="QCheckBox" name="m_principle_reference_convert_cb">
+            <property name="text">
+             <string>Convertir en SVG</string>
             </property>
            </widget>
           </item>

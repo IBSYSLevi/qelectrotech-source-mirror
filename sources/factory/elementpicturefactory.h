@@ -84,6 +84,7 @@ class ElementPictureFactory
 
 		void getPictures(const ElementsLocation &location, QPicture &picture, QPicture &low_picture);
 		QPixmap pixmap(const ElementsLocation &location);
+		QByteArray getSvg(const ElementsLocation &location);
 		ElementPictureFactory::primitives getPrimitives(const ElementsLocation &location);
 		
 	private:

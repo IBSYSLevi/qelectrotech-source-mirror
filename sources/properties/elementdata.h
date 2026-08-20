@@ -199,19 +199,15 @@ class ElementData : public PropertiesInterface
 		};
 
 		/**
-		 * @brief The ReferenceData struct
-		 * An optional layout/principle-schematic reference attached to
-		 * this element: either a directly embedded SVG/PNG/JPEG, or a
-		 * reference to another element in the collection. For the
-		 * "reference" case, no image data is generated/embedded yet --
-		 * that is a separate, later step (see
-		 * ElementPictureFactory::svgFromElement()); only the reference
-		 * itself is persisted for now. Project-embedded elements are
-		 * rejected at selection time (see
-		 * ElementPropertiesEditorWidget::onLayoutReferencePickElement()),
-		 * since they would become unresolvable whenever the source
-		 * project isn't open.
-		 */
+		* @brief The ReferenceData struct
+		* An optional layout/principle-schematic reference attached to
+		* this element: either a directly embedded SVG/PNG/JPEG, or a
+		* reference to another element in the collection. For the
+		* "reference" case, data/format are only populated once the
+		* user converts it via ElementPictureFactory::getSvg(); the
+		* reference itself is kept alongside for later re-conversion.
+		* Project-embedded elements are rejected at selection time.
+		*/
 		struct ReferenceData {
 			QString    source;      ///< "" (none), "direct", or "reference"
 			QByteArray data;        ///< embedded bytes, only when source == "direct"
@@ -305,7 +301,7 @@ class ElementData : public PropertiesInterface
 		QString m_drawing_information;
 
 		ReferenceData m_layout_reference;
-		ReferenceData m_principle_schematic_reference;
+		ReferenceData m_principle_reference;
 
 	private:
 		ElementData::TerminalType m_override_terminal_type = ElementData::TTGeneric;

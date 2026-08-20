@@ -90,7 +90,7 @@ ElementPropertiesEditorWidget::ElementPropertiesEditorWidget(ElementData data, Q
 	m_data(data)
 {
 	ui->setupUi(this);
-	setUpReferenceMenus();
+	setUpReferenceUi();
 	setUpInterface();
 	upDateInterface();
 }
@@ -114,33 +114,15 @@ void ElementPropertiesEditorWidget::upDateInterface()
 				ui->m_base_type_cb->findData(
 					m_data.m_type));
 
-	if (m_data.m_layout_reference.source == QLatin1String("direct")) {
-		ui->m_layout_reference_status_lbl->setText(tr("(fichier intégré)"));
-		ui->m_layout_reference_preview_lbl->setPixmap(
-			renderReferencePreview(m_data.m_layout_reference.data, m_data.m_layout_reference.format));
-	} else if (m_data.m_layout_reference.source == QLatin1String("reference")) {
-		ElementsLocation loc(m_data.m_layout_reference.reference);
-		ui->m_layout_reference_status_lbl->setText(loc.name());
-		ui->m_layout_reference_preview_lbl->setPixmap(
-			ElementPictureFactory::instance()->pixmap(loc).scaled(48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-	} else {
-		ui->m_layout_reference_status_lbl->setText(tr("Aucune"));
-		ui->m_layout_reference_preview_lbl->setPixmap(QPixmap());
-	}
+	updateReferenceUi(m_data.m_layout_reference,
+				  ui->m_layout_reference_status_lbl,
+				  ui->m_layout_reference_convert_cb,
+				  ui->m_layout_reference_preview_lbl);
 
-	if (m_data.m_principle_schematic_reference.source == QLatin1String("direct")) {
-		ui->m_principle_reference_status_lbl->setText(tr("(fichier intégré)"));
-		ui->m_principle_reference_preview_lbl->setPixmap(
-			renderReferencePreview(m_data.m_principle_schematic_reference.data, m_data.m_principle_schematic_reference.format));
-	} else if (m_data.m_principle_schematic_reference.source == QLatin1String("reference")) {
-		ElementsLocation loc(m_data.m_principle_schematic_reference.reference);
-		ui->m_principle_reference_status_lbl->setText(loc.name());
-		ui->m_principle_reference_preview_lbl->setPixmap(
-			ElementPictureFactory::instance()->pixmap(loc).scaled(48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-	} else {
-		ui->m_principle_reference_status_lbl->setText(tr("Aucune"));
-		ui->m_principle_reference_preview_lbl->setPixmap(QPixmap());
-	}
+	updateReferenceUi(m_data.m_principle_reference,
+					  ui->m_principle_reference_status_lbl,
+					  ui->m_principle_reference_convert_cb,
+					  ui->m_principle_reference_preview_lbl);
 	
 	if (m_data.m_type == ElementData::Slave)
 	{
@@ -447,17 +429,51 @@ void ElementPropertiesEditorWidget::on_m_buttonBox_accepted()
 	shows the menu -- deliberately, since we always want the user to
 	choose explicitly between the two rather than defaulting to one.
 */
-void ElementPropertiesEditorWidget::setUpReferenceMenus()
+void ElementPropertiesEditorWidget::setUpReferenceUi()
 {
 	auto *layout_menu = new QMenu(this);
 	layout_menu->addAction(tr("Fichier…"), this, &ElementPropertiesEditorWidget::onLayoutReferencePickFile);
 	layout_menu->addAction(tr("Élément…"), this, &ElementPropertiesEditorWidget::onLayoutReferencePickElement);
 	ui->m_layout_reference_browse_pb->setMenu(layout_menu);
+	ui->m_layout_reference_convert_cb->setVisible(false);
 
 	auto *principle_menu = new QMenu(this);
 	principle_menu->addAction(tr("Fichier…"), this, &ElementPropertiesEditorWidget::onPrincipleReferencePickFile);
 	principle_menu->addAction(tr("Élément…"), this, &ElementPropertiesEditorWidget::onPrincipleReferencePickElement);
 	ui->m_principle_reference_browse_pb->setMenu(principle_menu);
+	ui->m_principle_reference_convert_cb->setVisible(false);
+}
+
+/**
+	@brief ElementPropertiesEditorWidget::updateReferenceUi
+	Shared logic for both the layout and principle-schematic reference
+	rows -- identical behavior, only the ReferenceData and the four
+	widgets it touches differ between the two.
+*/
+void ElementPropertiesEditorWidget::updateReferenceUi(
+		const ElementData::ReferenceData &ref,
+		QLabel *status_lbl, QCheckBox *convert_cb, QLabel *preview_lbl)
+{
+	if (ref.source == QLatin1String("direct")) {
+		status_lbl->setText(tr("(fichier intégré)"));
+		convert_cb->setVisible(false);
+		preview_lbl->setPixmap(renderReferencePreview(ref.data, ref.format));
+	} else if (ref.source == QLatin1String("reference")) {
+		ElementsLocation loc(ref.reference);
+		status_lbl->setText(loc.name());
+		convert_cb->setVisible(true);
+		convert_cb->setChecked(!ref.data.isEmpty());
+		if (!ref.data.isEmpty()) {
+			preview_lbl->setPixmap(renderReferencePreview(ref.data, ref.format));
+		} else {
+			preview_lbl->setPixmap(
+				ElementPictureFactory::instance()->pixmap(loc).scaled(48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+		}
+	} else {
+		status_lbl->setText(tr("Aucune"));
+		convert_cb->setVisible(false);
+		preview_lbl->setPixmap(QPixmap());
+	}
 }
 
 QPixmap ElementPropertiesEditorWidget::renderReferencePreview(const QByteArray &data, const QString &format) const
@@ -472,13 +488,50 @@ QPixmap ElementPropertiesEditorWidget::renderReferencePreview(const QByteArray &
 		QPixmap pixmap(target_size);
 		pixmap.fill(Qt::transparent);
 		QPainter painter(&pixmap);
-		renderer.render(&painter, pixmap.rect());
+
+		QSizeF svg_size = renderer.defaultSize();
+		if (!svg_size.isEmpty()) {
+			svg_size.scale(target_size, Qt::KeepAspectRatio);
+			QRectF target_rect(
+				(target_size.width()  - svg_size.width())  / 2.0,
+				(target_size.height() - svg_size.height()) / 2.0,
+				svg_size.width(), svg_size.height());
+			renderer.render(&painter, target_rect);
+		} else {
+			renderer.render(&painter, pixmap.rect());
+		}
 		return pixmap;
 	}
 
 	QPixmap pixmap;
 	pixmap.loadFromData(data);
 	return pixmap.scaled(target_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+}
+
+/**
+	@brief ElementPropertiesEditorWidget::checkReferenceSize
+	@param size the candidate reference's size in bytes (a picked
+	file, or an already-generated SVG)
+	@return true if size is within the allowed limit. Shows a warning
+	and returns false otherwise. .elmt files are traditionally a few
+	KB -- keeping embedded references small protects that, both for
+	the file format itself and for how easily a PR touching it gets
+	reviewed.
+*/
+bool ElementPropertiesEditorWidget::checkIfSizeAllowed(qint64 size) const
+{
+	constexpr qint64 max_reference_size = 100 * 1024; // 100 KB
+
+	if (size <= max_reference_size)
+		return true;
+
+	QMessageBox::warning(const_cast<ElementPropertiesEditorWidget *>(this),
+		tr("Fichier trop volumineux"),
+		tr("Le fichier sélectionné (%1 KB) dépasse la taille maximale autorisée "
+		   "de 100 KB. Les fichiers d'éléments (.elmt) doivent rester légers -- "
+		   "utilisez une icône ou un symbole simple plutôt qu'une photo.")
+		.arg(size / 1024));
+	return false;
 }
 
 void ElementPropertiesEditorWidget::onLayoutReferencePickFile()
@@ -495,12 +548,15 @@ void ElementPropertiesEditorWidget::onLayoutReferencePickFile()
 	QFile file(path);
 	if (!file.open(QIODevice::ReadOnly))
 		return;
+	if (!checkIfSizeAllowed(file.size()))
+		return;
 
 	m_data.m_layout_reference.source = QStringLiteral("direct");
 	m_data.m_layout_reference.data = file.readAll();
 	m_data.m_layout_reference.format = QFileInfo(path).suffix().toLower();
 	m_data.m_layout_reference.reference.clear();
 
+	ui->m_layout_reference_convert_cb->setVisible(false);
 	ui->m_layout_reference_status_lbl->setText(QFileInfo(path).fileName());
 	ui->m_layout_reference_preview_lbl->setPixmap(
 		renderReferencePreview(m_data.m_layout_reference.data, m_data.m_layout_reference.format));
@@ -525,6 +581,8 @@ void ElementPropertiesEditorWidget::onLayoutReferencePickElement()
 	m_data.m_layout_reference.data.clear();
 	m_data.m_layout_reference.format.clear();
 
+	ui->m_layout_reference_convert_cb->setVisible(true);
+	ui->m_layout_reference_convert_cb->setChecked(false);
 	ui->m_layout_reference_status_lbl->setText(loc.name());
 	ui->m_layout_reference_preview_lbl->setPixmap(
 		ElementPictureFactory::instance()->pixmap(loc).scaled(
@@ -534,15 +592,34 @@ void ElementPropertiesEditorWidget::onLayoutReferencePickElement()
 void ElementPropertiesEditorWidget::on_m_layout_reference_clear_pb_clicked()
 {
 	m_data.m_layout_reference = ElementData::ReferenceData();
+	ui->m_layout_reference_convert_cb->setVisible(false);
 	ui->m_layout_reference_status_lbl->setText(tr("Aucune"));
 	ui->m_layout_reference_preview_lbl->setPixmap(QPixmap());
+}
+
+void ElementPropertiesEditorWidget::on_m_layout_reference_convert_cb_toggled(bool checked)
+{
+	if (m_data.m_layout_reference.source != QLatin1String("reference"))
+		return;
+
+	if (checked) {
+		ElementsLocation loc(m_data.m_layout_reference.reference);
+		m_data.m_layout_reference.data = ElementPictureFactory::instance()->getSvg(loc);
+		m_data.m_layout_reference.format = QStringLiteral("svg");
+	} else {
+		m_data.m_layout_reference.data.clear();
+		m_data.m_layout_reference.format.clear();
+	}
+
+	ui->m_layout_reference_preview_lbl->setPixmap(
+		renderReferencePreview(m_data.m_layout_reference.data, m_data.m_layout_reference.format));
 }
 
 void ElementPropertiesEditorWidget::onPrincipleReferencePickFile()
 {
 	const QString path = QFileDialog::getOpenFileName(
 		this,
-		tr("Choisir une référence de schéma de principe"),
+		tr("Choisir une référence de principe"),
 		QString(),
 		tr("Images (*.svg *.png *.jpg *.jpeg)"));
 
@@ -552,15 +629,18 @@ void ElementPropertiesEditorWidget::onPrincipleReferencePickFile()
 	QFile file(path);
 	if (!file.open(QIODevice::ReadOnly))
 		return;
+	if (!checkIfSizeAllowed(file.size()))
+		return;
 
-	m_data.m_principle_schematic_reference.source = QStringLiteral("direct");
-	m_data.m_principle_schematic_reference.data = file.readAll();
-	m_data.m_principle_schematic_reference.format = QFileInfo(path).suffix().toLower();
-	m_data.m_principle_schematic_reference.reference.clear();
+	m_data.m_principle_reference.source = QStringLiteral("direct");
+	m_data.m_principle_reference.data = file.readAll();
+	m_data.m_principle_reference.format = QFileInfo(path).suffix().toLower();
+	m_data.m_principle_reference.reference.clear();
 
+	ui->m_principle_reference_convert_cb->setVisible(false);
 	ui->m_principle_reference_status_lbl->setText(QFileInfo(path).fileName());
 	ui->m_principle_reference_preview_lbl->setPixmap(
-		renderReferencePreview(m_data.m_principle_schematic_reference.data, m_data.m_principle_schematic_reference.format));
+		renderReferencePreview(m_data.m_principle_reference.data, m_data.m_principle_reference.format));
 }
 
 void ElementPropertiesEditorWidget::onPrincipleReferencePickElement()
@@ -577,11 +657,13 @@ void ElementPropertiesEditorWidget::onPrincipleReferencePickElement()
 		return;
 	}
 
-	m_data.m_layout_reference.source = QStringLiteral("reference");
-	m_data.m_layout_reference.reference = loc.toString();
-	m_data.m_layout_reference.data.clear();
-	m_data.m_layout_reference.format.clear();
+	m_data.m_principle_reference.source = QStringLiteral("reference");
+	m_data.m_principle_reference.reference = loc.toString();
+	m_data.m_principle_reference.data.clear();
+	m_data.m_principle_reference.format.clear();
 
+	ui->m_principle_reference_convert_cb->setVisible(true);
+	ui->m_principle_reference_convert_cb->setChecked(false);
 	ui->m_principle_reference_status_lbl->setText(loc.name());
 	ui->m_principle_reference_preview_lbl->setPixmap(
 		ElementPictureFactory::instance()->pixmap(loc).scaled(
@@ -590,9 +672,28 @@ void ElementPropertiesEditorWidget::onPrincipleReferencePickElement()
 
 void ElementPropertiesEditorWidget::on_m_principle_reference_clear_pb_clicked()
 {
-	m_data.m_principle_schematic_reference = ElementData::ReferenceData();
+	m_data.m_principle_reference = ElementData::ReferenceData();
+	ui->m_principle_reference_convert_cb->setVisible(false);
 	ui->m_principle_reference_status_lbl->setText(tr("Aucune"));
 	ui->m_principle_reference_preview_lbl->setPixmap(QPixmap());
+}
+
+void ElementPropertiesEditorWidget::on_m_principle_reference_convert_cb_toggled(bool checked)
+{
+	if (m_data.m_principle_reference.source != QLatin1String("reference"))
+		return;
+
+	if (checked) {
+		ElementsLocation loc(m_data.m_principle_reference.reference);
+		m_data.m_principle_reference.data = ElementPictureFactory::instance()->getSvg(loc);
+		m_data.m_principle_reference.format = QStringLiteral("svg");
+	} else {
+		m_data.m_principle_reference.data.clear();
+		m_data.m_principle_reference.format.clear();
+	}
+
+	ui->m_principle_reference_preview_lbl->setPixmap(
+		renderReferencePreview(m_data.m_principle_reference.data, m_data.m_principle_reference.format));
 }
 
 /**

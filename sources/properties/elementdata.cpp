@@ -62,7 +62,7 @@ bool ElementData::fromXml(const QDomElement &xml_element)
 	}
 
 	referenceDataFromXml(xml_element.firstChildElement(QStringLiteral("layoutReference")), m_layout_reference);
-	referenceDataFromXml(xml_element.firstChildElement(QStringLiteral("principleSchematicReference")), m_principle_schematic_reference);
+	referenceDataFromXml(xml_element.firstChildElement(QStringLiteral("principleReference")), m_principle_reference);
 
 	return true;
 }
@@ -287,15 +287,15 @@ QDomElement ElementData::referenceDataToXml(QDomDocument &document, const Refere
 
 	if (ref.source == QLatin1String("reference")) {
 		element.setAttribute(QStringLiteral("reference"), ref.reference);
-		return element;
 	}
 
-	//source == "direct"
-	element.setAttribute(QStringLiteral("format"), ref.format);
-	if (ref.format == QLatin1String("svg")) {
-		element.appendChild(document.createCDATASection(QString::fromUtf8(ref.data)));
-	} else {
-		element.appendChild(document.createTextNode(QString::fromLatin1(ref.data.toBase64())));
+	if (!ref.data.isEmpty()) {
+		element.setAttribute(QStringLiteral("format"), ref.format);
+		if (ref.format == QLatin1String("svg")) {
+			element.appendChild(document.createCDATASection(QString::fromUtf8(ref.data)));
+		} else {
+			element.appendChild(document.createTextNode(QString::fromLatin1(ref.data.toBase64())));
+		}
 	}
 	return element;
 }
@@ -313,10 +313,9 @@ void ElementData::referenceDataFromXml(const QDomElement &xml_element, Reference
 	ref.source = xml_element.attribute(QStringLiteral("source"));
 	if (ref.source == QLatin1String("reference")) {
 		ref.reference = xml_element.attribute(QStringLiteral("reference"));
-		return;
 	}
 
-	if (ref.source == QLatin1String("direct")) {
+	if (xml_element.hasAttribute(QStringLiteral("format"))) {
 		ref.format = xml_element.attribute(QStringLiteral("format"));
 		if (ref.format == QLatin1String("svg")) {
 			ref.data = xml_element.text().toUtf8();
