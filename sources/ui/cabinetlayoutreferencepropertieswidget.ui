@@ -74,7 +74,7 @@
                         <item row="3" column="1">
                             <widget class="QDoubleSpinBox" name="m_box_pen_width_dsb">
                                 <property name="minimum">
-                                    <double>0.000000000000001</double>
+                                    <double>0.010000000000000</double>
                                 </property>
                                 <property name="maximum">
                                     <double>99.000000000000000</double>
