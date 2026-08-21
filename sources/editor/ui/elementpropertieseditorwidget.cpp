@@ -501,7 +501,9 @@ QPixmap ElementPropertiesEditorWidget::renderReferencePreview(const QByteArray &
 		pixmap.fill(Qt::transparent);
 		QPainter painter(&pixmap);
 
-		QSizeF svg_size = renderer.defaultSize();
+		QSizeF svg_size = renderer.viewBoxF().size();
+		if (svg_size.isEmpty())
+			svg_size = renderer.defaultSize();
 		if (!svg_size.isEmpty()) {
 			svg_size.scale(target_size, Qt::KeepAspectRatio);
 			QRectF target_rect(

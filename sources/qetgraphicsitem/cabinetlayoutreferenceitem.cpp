@@ -19,14 +19,15 @@
 #include "cabinetlayoutreferenceitem.h"
 
 #include "../diagram.h"
-#include "../qetproject.h"
 #include "../elementprovider.h"
 #include "../qetgraphicsitem/element.h"
+#include "../qetproject.h"
 
+#include <QGraphicsSceneMouseEvent>
 #include <QPainter>
 #include <QPen>
 #include <QStyleOptionGraphicsItem>
-#include <QGraphicsSceneMouseEvent>
+#include <qsvgrenderer.h>
 
 CabinetLayoutReferenceItem::CabinetLayoutReferenceItem(
 		const QUuid &source_element_uuid,
@@ -61,9 +62,25 @@ void CabinetLayoutReferenceItem::setPos(const QPointF &p)
 	QGraphicsItem::setPos(p);
 }
 
-QRectF CabinetLayoutReferenceItem::boundingRect() const
+/**
+	@brief CabinetLayoutReferenceItem::boxRect
+	The box itself, centered on the local origin -- unlike
+	boundingRect(), which additionally reserves space above the box
+	for the label when a layout picture is active (@see paint()).
+*/
+QRectF CabinetLayoutReferenceItem::boxRect() const
 {
 	return QRectF(-m_box_width / 2, -m_box_height / 2, m_box_width, m_box_height);
+}
+
+QRectF CabinetLayoutReferenceItem::boundingRect() const
+{
+	QRectF rect = boxRect();
+	if (m_has_layout_picture) {
+		const qreal label_height = QFontMetricsF(m_font).height() + 4;
+		rect.setTop(rect.top() - label_height);
+	}
+	return rect;
 }
 
 /**
@@ -115,28 +132,8 @@ void CabinetLayoutReferenceItem::paint(
 	Q_UNUSED(options)
 
 	painter->save();
-
-	QPen pen = m_pen;
-	if (m_is_orphaned) {
-		pen.setColor(Qt::red);
-		pen.setStyle(Qt::DashLine);
-	}
-	pen.setCosmetic(true);
-	painter->setPen(pen);
-	painter->setBrush(m_brush);
-	painter->drawRect(boundingRect());
-
-	painter->setFont(m_font);
-	const QString display_label = m_is_orphaned
-			? QStringLiteral("⚠ ") + m_label
-			: m_label;
-
-	painter->save();
-	painter->rotate(m_text_rotation);
-	const qreal longest_side = qMax(m_box_width, m_box_height);
-	QRectF text_rect(-longest_side / 2, -longest_side / 2, longest_side, longest_side);
-	painter->drawText(text_rect, Qt::AlignCenter, display_label);
-	painter->restore();
+	drawBox(painter);
+	drawLabel(painter);
 
 	if (isSelected() || isHovered()) {
 		QPen sel_pen(Qt::blue);
@@ -178,6 +175,119 @@ void CabinetLayoutReferenceItem::applyElementData(Element *element)
 	m_real_height_mm = h_ok ? height_mm : 0.0;
 
 	recomputeBoxSize();
+	applyLayoutPicture(element);
+}
+
+/**
+	@brief CabinetLayoutReferenceItem::applyLayoutPicture
+	Fills m_brush with the source element's own embedded layout
+	reference (@see ElementData::m_layout_reference), if one exists
+	with actually embedded data -- an unconverted "reference" (source
+	== "reference" but data still empty, i.e. the symbol author picked
+	a collection element but never checked "Convertir en SVG") is
+	treated the same as having none at all, matching the deliberate
+	design that generation only ever happens as an explicit editor
+	action, never implicitly here at draw time.
+	Falls back to the existing solid-color fill (unchanged from
+	before this feature existed) when there's nothing to show.
+*/
+void CabinetLayoutReferenceItem::applyLayoutPicture(Element *element)
+{
+	prepareGeometryChange();
+
+	const ElementData::ReferenceData &ref = element->elementData().m_layout_reference;
+
+	m_layout_svg_renderer.reset();
+
+	if (ref.data.isEmpty()) {
+		m_has_layout_picture = false;
+		update();
+		return;
+	}
+
+	if (!m_has_layout_picture)
+		m_text_rotation = 0;
+
+	m_has_layout_picture = true;
+
+	if (ref.format == QLatin1String("svg")) {
+		m_layout_svg_renderer.reset(new QSvgRenderer(ref.data));
+		m_box_brush = QBrush();
+	} else {
+		QPixmap pixmap;
+		pixmap.loadFromData(ref.data);
+		m_box_brush = QBrush(pixmap.scaled(boundingRect().size().toSize(),
+										Qt::KeepAspectRatio, Qt::SmoothTransformation));
+	}
+
+	update();
+}
+
+void CabinetLayoutReferenceItem::drawBox(QPainter *painter) const
+{
+	QPen pen = m_box_pen;
+	if (m_is_orphaned) {
+		pen.setColor(Qt::red);
+		pen.setStyle(Qt::DashLine);
+	}
+	pen.setCosmetic(true);
+	painter->setPen(pen);
+
+	const QRectF box_rect = boxRect();
+
+	if (m_layout_svg_renderer) {
+		painter->setBrush(Qt::NoBrush);
+		painter->drawRect(box_rect);
+
+		QSizeF svg_size = m_layout_svg_renderer->viewBoxF().size();
+		if (svg_size.isEmpty())
+			svg_size = m_layout_svg_renderer->defaultSize();
+
+		if (!svg_size.isEmpty()) {
+			svg_size.scale(box_rect.size(), Qt::KeepAspectRatio);
+			QRectF target_rect(
+				box_rect.center().x() - svg_size.width() / 2.0,
+				box_rect.center().y() - svg_size.height() / 2.0,
+				svg_size.width(), svg_size.height());
+			m_layout_svg_renderer->render(painter, target_rect);
+		}
+		else
+		{
+			m_layout_svg_renderer->render(painter, box_rect);
+		}
+	} else {
+		painter->setBrush(m_box_brush);
+		painter->setBrushOrigin(box_rect.topLeft());
+		painter->drawRect(box_rect);
+	}
+}
+
+void CabinetLayoutReferenceItem::drawLabel(QPainter *painter) const
+{
+	QPen pen = m_text_pen;
+	if (m_is_orphaned)
+		pen.setColor(Qt::red);
+	pen.setStyle(Qt::SolidLine);
+	pen.setCosmetic(true);
+	painter->setPen(pen);
+
+	painter->setFont(m_font);
+	const QString display_label = m_is_orphaned
+			? QStringLiteral("⚠ ") + m_label
+			: m_label;
+
+	const QRectF box_rect = boxRect();
+
+	painter->save();
+	if (m_has_layout_picture) {
+		const qreal label_height = QFontMetricsF(m_font).height() + 4;
+		painter->translate(box_rect.center().x(), box_rect.top() - label_height / 2.0);
+	}
+	painter->rotate(m_text_rotation);
+	const qreal longest_side = qMax(m_box_width, m_box_height);
+	QRectF text_rect(-longest_side / 2, -longest_side / 2, longest_side, longest_side);
+	painter->drawText(text_rect, Qt::AlignCenter, display_label);
+	painter->restore();
 }
 
 void CabinetLayoutReferenceItem::setDisplayedInfoKey(const QString &key)
@@ -320,9 +430,9 @@ QDomElement CabinetLayoutReferenceItem::toXml(QDomDocument &document) const
 	element.setAttribute(QStringLiteral("last_known_label"), m_label);
 	element.setAttribute(QStringLiteral("last_known_width_mm"), QString::number(m_real_width_mm));
 	element.setAttribute(QStringLiteral("last_known_height_mm"), QString::number(m_real_height_mm));
-	element.setAttribute(QStringLiteral("pen_color"), m_pen.color().name());
-	element.setAttribute(QStringLiteral("pen_width"), QString::number(m_pen.widthF()));
-	element.setAttribute(QStringLiteral("brush_color"), m_brush.color().name(QColor::HexArgb));
+	element.setAttribute(QStringLiteral("pen_color"), m_box_pen.color().name());
+	element.setAttribute(QStringLiteral("pen_width"), QString::number(m_box_pen.widthF()));
+	element.setAttribute(QStringLiteral("brush_color"), m_box_brush.color().name(QColor::HexArgb));
 	element.setAttribute(QStringLiteral("text_rotation"), QString::number(m_text_rotation));
 	element.setAttribute(QStringLiteral("font"), m_font.toString());
 	element.setAttribute(QStringLiteral("displayed_info_key"), m_displayed_info_key);
@@ -358,10 +468,10 @@ bool CabinetLayoutReferenceItem::fromXml(const QDomElement &dom_element)
 	m_real_width_mm  = dom_element.attribute(QStringLiteral("last_known_width_mm")).toDouble();
 	m_real_height_mm = dom_element.attribute(QStringLiteral("last_known_height_mm")).toDouble();
 
-	m_pen.setColor(QColor(dom_element.attribute(QStringLiteral("pen_color"), QStringLiteral("#000000"))));
-	m_pen.setWidthF(dom_element.attribute(QStringLiteral("pen_width"), QStringLiteral("1")).toDouble());
-	m_brush.setColor(QColor(dom_element.attribute(QStringLiteral("brush_color"), QStringLiteral("#41c8c8c8"))));
-	m_brush.setStyle(Qt::SolidPattern);
+	m_box_pen.setColor(QColor(dom_element.attribute(QStringLiteral("pen_color"), QStringLiteral("#000000"))));
+	m_box_pen.setWidthF(dom_element.attribute(QStringLiteral("pen_width"), QStringLiteral("1")).toDouble());
+	m_box_brush.setColor(QColor(dom_element.attribute(QStringLiteral("brush_color"), QStringLiteral("#41c8c8c8"))));
+	m_box_brush.setStyle(Qt::SolidPattern);
 	m_text_rotation = dom_element.attribute(QStringLiteral("text_rotation"), QStringLiteral("270")).toDouble();
 	QFont f; f.fromString(dom_element.attribute(QStringLiteral("font"), m_font.toString()));
 	m_font = f;

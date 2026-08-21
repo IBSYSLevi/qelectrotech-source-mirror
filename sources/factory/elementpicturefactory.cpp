@@ -134,17 +134,17 @@ QPixmap ElementPictureFactory::pixmap(const ElementsLocation &location)
 QByteArray ElementPictureFactory::getSvg(const ElementsLocation &location)
 {
 	QUuid uuid = location.uuid();
-
-	if (!m_pictures_H.contains(uuid)) {
-		if (!build(location))
-			return QByteArray();
-	}
+	if (!m_pictures_H.contains(uuid) && !build(location))
+		return QByteArray();
 
 	auto doc = location.pugiXml();
-	int w = doc.document_element().attribute("width").as_int();
-	int h = doc.document_element().attribute("height").as_int();
-	int hsx = doc.document_element().attribute("hotspot_x").as_int();
-	int hsy = doc.document_element().attribute("hotspot_y").as_int();
+	const int hsx = doc.document_element().attribute("hotspot_x").as_int();
+	const int hsy = doc.document_element().attribute("hotspot_y").as_int();
+
+	const QPicture &pic = m_pictures_H.value(uuid);
+	const QRect content_rect = pic.boundingRect().translated(hsx, hsy);
+	if (content_rect.isEmpty())
+		return QByteArray();
 
 	QByteArray svg_bytes;
 	QBuffer buffer(&svg_bytes);
@@ -152,14 +152,19 @@ QByteArray ElementPictureFactory::getSvg(const ElementsLocation &location)
 
 	QSvgGenerator generator;
 	generator.setOutputDevice(&buffer);
-	generator.setSize(QSize(w, h));
-	generator.setViewBox(QRect(0, 0, w, h));
+	//QPicture recording assumes the usual 96 DPI screen convention,
+	//but QSvgGenerator's own default resolution differs (72 DPI) --
+	//left unset, that mismatch silently bakes a 72/96 = 0.75 scale
+	//into every drawn primitive's transform on export.
+	generator.setResolution(96);
+	generator.setSize(content_rect.size());
+	generator.setViewBox(QRect(QPoint(0, 0), content_rect.size()));
 	generator.setTitle(location.name());
 
 	QPainter painter(&generator);
 	painter.setRenderHint(QPainter::Antialiasing, true);
-	painter.translate(hsx, hsy);
-	painter.drawPicture(0, 0, m_pictures_H.value(uuid));
+	painter.translate(hsx - content_rect.left(), hsy - content_rect.top());
+	painter.drawPicture(0, 0, pic);
 	painter.end();
 
 	return svg_bytes;
