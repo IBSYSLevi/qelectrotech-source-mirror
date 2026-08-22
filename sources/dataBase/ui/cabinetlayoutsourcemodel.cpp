@@ -131,7 +131,9 @@ void CabinetLayoutSourceModel::reload()
 		const QString height	= query.value("height").toString();
 		const QString depth		= query.value("depth").toString();
 
-		const bool has_dimensions = !width.isEmpty() || !height.isEmpty();
+		const bool is_front = !m_active_diagram || m_active_diagram->cabinetLayoutView() == Diagram::CabinetLayoutFront;
+		const QString relevant_dimension = is_front ? width : depth;
+		const bool has_dimensions = relevant_dimension.toDouble() > 0.0 && height.toDouble() > 0.0;
 
 		const QString folio_key = folio + '\x1f' + title;
 		if (folio_key != current_folio_key)

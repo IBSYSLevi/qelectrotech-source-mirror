@@ -25,6 +25,9 @@
 #include <QPen>
 #include <QPointer>
 #include <QUuid>
+#include <QSvgRenderer>
+#include <QScopedPointer>
+#include <QFontMetricsF>
 
 class QETProject;
 class Element;
@@ -90,6 +93,7 @@ class CabinetLayoutReferenceItem : public QetGraphicsItem
 		int type() const override { return Type; }
 		void setPos(const QPointF &p) override;
 
+		QRectF boxRect() const;
 		QRectF boundingRect() const override;
 		void fitFontSizeToBox();
 		void paint(QPainter *painter,
@@ -103,16 +107,17 @@ class CabinetLayoutReferenceItem : public QetGraphicsItem
 		bool isSideView() const { return m_is_side_view; }
 		bool isOrphaned() const { return m_is_orphaned; }
 
-		QPen pen() const { return m_pen; }
-		void setPen(const QPen &pen) { m_pen = pen; update(); }
-		QBrush brush() const { return m_brush; }
-		void setBrush(const QBrush &brush) { m_brush = brush; update(); }
+		QPen pen() const { return m_box_pen; }
+		void setPen(const QPen &pen) { m_box_pen = pen; update(); }
+		QBrush brush() const { return m_box_brush; }
+		void setBrush(const QBrush &brush) { m_box_brush = brush; update(); }
 		qreal textRotation() const { return m_text_rotation; }
 		void setTextRotation(qreal angle) { m_text_rotation = angle; update(); }
 		QFont font() const { return m_font; }
 		void setFont(const QFont &font) { m_font = font; update(); }
 		QString displayedInfoKey() const { return m_displayed_info_key; }
 		void setDisplayedInfoKey(const QString &key);
+		bool hasLayoutPicture() const { return m_has_layout_picture; }
 
 		/**
 			@brief linkToSource
@@ -197,7 +202,10 @@ class CabinetLayoutReferenceItem : public QetGraphicsItem
 
 	private:
 		void applyElementData(Element *element);
+		void applyLayoutPicture(Element *element);
 		void recomputeBoxSize();
+		void drawBox(QPainter *painter) const;
+		void drawLabel(QPainter *painter) const;
 
 		QUuid m_source_element_uuid;
 		bool m_is_side_view;
@@ -212,11 +220,15 @@ class CabinetLayoutReferenceItem : public QetGraphicsItem
 		qreal m_box_width  = 100;
 		qreal m_box_height = 100;
 
-		QPen m_pen { QColor(Qt::black), 1.0 };
-		QBrush m_brush { QColor(200, 200, 200, 65) };
+		QPen m_box_pen { QColor(Qt::black), 1.0 };
+		QBrush m_box_brush { QColor(200, 200, 200, 65) };
+		QPen m_text_pen { QColor(Qt::black), 1.0 };
 		qreal m_text_rotation = 270;
 		QString m_displayed_info_key = QStringLiteral("label");
 		QFont m_font { QStringLiteral("Sans Serif"), 7 };
+
+		QScopedPointer<QSvgRenderer> m_layout_svg_renderer;
+		bool m_has_layout_picture = false;
 };
 
 #endif // CABINETLAYOUTREFERENCEITEM_H

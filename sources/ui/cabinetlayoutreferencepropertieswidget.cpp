@@ -33,15 +33,18 @@ CabinetLayoutReferencePropertiesWidget::CabinetLayoutReferencePropertiesWidget(
 	m_item(nullptr)
 {
 	ui->setupUi(this);
-	ui->m_pen_style_cb->addItem(tr("Continu"));
-	ui->m_pen_style_cb->addItem(tr("Tirets"));
-	ui->m_pen_style_cb->addItem(tr("Pointillés"));
-	ui->m_pen_style_cb->addItem(tr("Tirets-points"));
-	ui->m_pen_style_cb->addItem(tr("Tirets-points-points"));
-	ui->m_pen_style_cb->addItem(tr("Tirets personnalisés"));
+	ui->m_box_pen_style_cb->addItem(tr("Aucune"));
+	ui->m_box_pen_style_cb->addItem(tr("Continu"));
+	ui->m_box_pen_style_cb->addItem(tr("Tirets"));
+	ui->m_box_pen_style_cb->addItem(tr("Pointillés"));
+	ui->m_box_pen_style_cb->addItem(tr("Tirets-points"));
+	ui->m_box_pen_style_cb->addItem(tr("Tirets-points-points"));
+	ui->m_box_pen_style_cb->addItem(tr("Tirets personnalisés"));
 
-	ui->m_width_dsb->setSuffix(tr(" px"));
-	ui->m_height_dsb->setSuffix(tr(" px"));
+	ui->m_box_width_dsb->setSuffix(tr(" px"));
+	ui->m_box_height_dsb->setSuffix(tr(" px"));
+	ui->m_box_width_dsb->setEnabled(false);
+	ui->m_box_height_dsb->setEnabled(false);
 	ui->m_box_rotation_sb->setSuffix(tr(" °"));
 	ui->m_text_rotation_sb->setSuffix(tr(" °"));
 
@@ -88,14 +91,23 @@ void CabinetLayoutReferencePropertiesWidget::updateUi()
 
 	clearEditConnection();
 
-	ui->m_width_dsb->setValue(m_item->boundingRect().width());
-	ui->m_height_dsb->setValue(m_item->boundingRect().height());
+	ui->m_box_width_dsb->setValue(m_item->boxRect().width());
+	ui->m_box_height_dsb->setValue(m_item->boxRect().height());
 
-	ui->m_pen_style_cb->setCurrentIndex(static_cast<int>(m_item->pen().style()) - 1);
-	ui->m_pen_width_dsb->setValue(m_item->pen().widthF());
-	ui->m_pen_color_kpb->setColor(m_item->pen().color());
+	ui->m_box_pen_style_cb->setCurrentIndex(static_cast<int>(m_item->pen().style()));
+	ui->m_box_pen_width_dsb->setValue(m_item->pen().widthF());
+	ui->m_box_pen_color_kpb->setColor(m_item->pen().color());
+	const bool has_line = m_item->pen().style() != Qt::NoPen;
+	ui->label_box_pen_width->setVisible(has_line);
+	ui->m_box_pen_width_dsb->setVisible(has_line);
+	ui->m_box_pen_color_kpb->setVisible(has_line);
+	ui->label_box_pen_color->setVisible(has_line);
 
-	ui->m_brush_color_kpb->setColor(m_item->brush().color());
+	ui->m_box_brush_color_kpb->setColor(m_item->brush().color());
+
+	const bool has_picture = m_item->hasLayoutPicture();
+	ui->m_box_brush_color_kpb->setVisible(!has_picture);
+	ui->label_box_fill_color->setVisible(!has_picture);
 
 	ui->m_box_rotation_sb->setValue(int(m_item->rotation()));
 
@@ -136,9 +148,9 @@ QUndoCommand* CabinetLayoutReferencePropertiesWidget::associatedUndo() const
 
 	QPen old_pen = m_item->pen();
 	QPen new_pen = old_pen;
-	new_pen.setStyle(Qt::PenStyle(ui->m_pen_style_cb->currentIndex() + 1));
-	new_pen.setWidthF(ui->m_pen_width_dsb->value());
-	new_pen.setColor(ui->m_pen_color_kpb->color());
+	new_pen.setStyle(Qt::PenStyle(ui->m_box_pen_style_cb->currentIndex()));
+	new_pen.setWidthF(ui->m_box_pen_width_dsb->value());
+	new_pen.setColor(ui->m_box_pen_color_kpb->color());
 	if (new_pen != old_pen)
 	{
 		undo = new QPropertyUndoCommand(m_item, "pen", old_pen, new_pen);
@@ -151,7 +163,7 @@ QUndoCommand* CabinetLayoutReferencePropertiesWidget::associatedUndo() const
 	//additional, optional source/path in paint().
 	QBrush old_brush = m_item->brush();
 	QBrush new_brush = old_brush;
-	new_brush.setColor(ui->m_brush_color_kpb->color());
+	new_brush.setColor(ui->m_box_brush_color_kpb->color());
 	if (new_brush != old_brush)
 	{
 		if (undo)
@@ -216,6 +228,8 @@ void CabinetLayoutReferencePropertiesWidget::apply()
 	QUndoCommand *undo = associatedUndo();
 	if (undo)
 		m_item->diagram()->undoStack().push(undo);
+
+	updateUi();
 }
 
 void CabinetLayoutReferencePropertiesWidget::reset()
@@ -241,14 +255,16 @@ void CabinetLayoutReferencePropertiesWidget::setUpEditConnection()
 	if (!m_item)
 		return;
 
-	m_edit_connection << connect(ui->m_pen_style_cb, QOverload<int>::of(&QComboBox::activated),
+	m_edit_connection << connect(ui->m_box_pen_style_cb, QOverload<int>::of(&QComboBox::activated),
 							  this, &CabinetLayoutReferencePropertiesWidget::apply);
-	m_edit_connection << connect(ui->m_pen_width_dsb, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+	m_edit_connection << connect(ui->m_box_pen_width_dsb, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
 								  this, &CabinetLayoutReferencePropertiesWidget::apply);
-	m_edit_connection << connect(ui->m_pen_color_kpb, &KColorButton::changed,
+	m_edit_connection << connect(ui->m_box_pen_color_kpb, &KColorButton::changed,
 								  this, &CabinetLayoutReferencePropertiesWidget::apply);
+	m_edit_connection << connect(ui->m_box_pen_style_cb, QOverload<int>::of(&QComboBox::activated),
+							  this, &CabinetLayoutReferencePropertiesWidget::apply);
 
-	m_edit_connection << connect(ui->m_brush_color_kpb, &KColorButton::changed,
+	m_edit_connection << connect(ui->m_box_brush_color_kpb, &KColorButton::changed,
 								  this, &CabinetLayoutReferencePropertiesWidget::apply);
 
 	m_edit_connection << connect(ui->m_box_rotation_sb, QOverload<int>::of(&QSpinBox::valueChanged),
