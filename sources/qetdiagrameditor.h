@@ -129,6 +129,7 @@ class QETDiagramEditor : public QETMainWindow
 		void setWindowedMode();
 		void setTabbedMode();
 		void readSettings();
+		void readSettingsState();
 		void writeSettings();
 		void activateProject(QETProject *);
 		void activateProject(ProjectView *);
