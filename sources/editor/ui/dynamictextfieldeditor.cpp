@@ -233,6 +233,11 @@ void DynamicTextFieldEditor::disconnectConnections()
 */
 void DynamicTextFieldEditor::fillInfoComboBox()
 {
+	if (ui->m_elmt_info_cb->view() && ui->m_elmt_info_cb->view()->isVisible()) {
+		return;
+	}
+
+	const QString current = ui->m_elmt_info_cb->currentData().toString();
 	ui -> m_elmt_info_cb -> clear();
 
 	QStringList strl;
@@ -278,6 +283,11 @@ void DynamicTextFieldEditor::fillInfoComboBox()
 
 	for (int i=0; i<strl.size();++i) {
 		ui -> m_elmt_info_cb -> addItem(QETInformation::translatedInfoKey(strl[i]), strl[i]);
+	}
+
+	int index = ui->m_elmt_info_cb->findData(current);
+	if (index >= 0) {
+		ui->m_elmt_info_cb->setCurrentIndex(index);
 	}
 }
 
@@ -386,19 +396,9 @@ void DynamicTextFieldEditor::on_m_elmt_info_cb_activated(int index) {
 */
 void DynamicTextFieldEditor::updateTextFromWidgetsEnabled(int index)
 {
-	ui -> m_user_text_le -> setDisabled(true);
-	ui -> m_elmt_info_cb -> setDisabled(true);
-	ui -> m_composite_text_pb -> setDisabled(true);
-
-	if(index == 0) {
-		ui->m_user_text_le->setEnabled(true);
-	}
-	else if (index == 1) {
-		ui->m_elmt_info_cb->setEnabled(true);
-	}
-	else {
-		ui->m_composite_text_pb->setEnabled(true);
-	}
+	ui->m_user_text_le->setEnabled(index == 0);
+	ui->m_elmt_info_cb->setEnabled(index == 1);
+	ui->m_composite_text_pb->setEnabled(index == 2);
 }
 
 void DynamicTextFieldEditor::on_m_text_from_cb_activated(int index) {
