@@ -62,7 +62,6 @@ class DiagramView : public QGraphicsView
 		QPolygonF m_free_rubberband;
 		bool m_free_rubberbanding = false;
 		
-		
 	public:
 		QString title() const;
 		void editDiagramProperties();
@@ -97,6 +96,7 @@ class DiagramView : public QGraphicsView
 		void handleElementDrop(QDropEvent *);
 		void handleTitleBlockDrop(QDropEvent *);
 		void handleTextDrop(QDropEvent *);
+		void handleCabinetLayoutDrop(QDropEvent *);
 		void scrollOnMovement(QKeyEvent *);
 		bool gestureEvent(QGestureEvent *event);
 		QRectF viewedSceneRect() const;
