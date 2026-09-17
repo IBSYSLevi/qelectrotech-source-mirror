@@ -111,6 +111,9 @@ class Diagram : public QGraphicsScene
 		QHash <QString, QStringList> m_cnd_tenfolio_max;
 		QHash <QString, QStringList> m_cnd_hundredfolio_max;
 
+		enum CabinetLayoutView { CabinetLayoutFront, CabinetLayoutSide };
+		Q_ENUM(CabinetLayoutView)
+
 	private:
 		QGraphicsLineItem *conductor_setter_;
 		ElementsMover     m_elements_mover;
@@ -139,7 +142,10 @@ class Diagram : public QGraphicsScene
 
 		bool uuidUsedByOtherDiagram(const QUuid &uuid) const;
 		QUuid derivedUuid(const QDomElement &root, const QString &reason) const;
-	
+		bool m_cabinet_layout_enabled = false;
+		qreal m_cabinet_layout_scale = 2.0;
+		CabinetLayoutView m_cabinet_layout_view = CabinetLayoutFront;
+
 	// METHODS
 	protected:
 		void drawBackground(QPainter *, const QRectF &) override;
@@ -217,7 +223,7 @@ class Diagram : public QGraphicsScene
 		virtual void addItem    (QGraphicsItem *item);
 		virtual void removeItem (QGraphicsItem *item);
 		bool eventInterfaceIsRunning() const;
-	
+
 		// methods related to graphics options
 		ExportProperties applyProperties(const ExportProperties &);
 		void setDisplayGrid(bool);
@@ -269,7 +275,17 @@ class Diagram : public QGraphicsScene
 		void freezeConductors(bool freeze);
 		void setFreezeNewConductors(bool);
 		bool freezeNewConductors();
-	
+
+		//methods related to the cabinet layout settings
+		bool cabinetLayoutEnabled() const { return m_cabinet_layout_enabled; }
+		void setCabinetLayoutEnabled(bool enabled) { m_cabinet_layout_enabled = enabled; }
+
+		qreal cabinetLayoutScale() const { return m_cabinet_layout_scale; }
+		void setCabinetLayoutScale(qreal scale) { m_cabinet_layout_scale = scale; }
+
+		CabinetLayoutView cabinetLayoutView() const { return m_cabinet_layout_view; }
+		void setCabinetLayoutView(CabinetLayoutView view) { m_cabinet_layout_view = view; }
+
 		//methods related to insertion and loading of folio sequential
 		void insertFolioSeqHash (QHash<QString, QStringList> *hash,
 					 const QString& title,
@@ -308,6 +324,8 @@ class Diagram : public QGraphicsScene
 
 		void diagramActivated();
 		void diagramInformationChanged();
+
+		void cabinetLayoutReferencesChanged();
 };
 Q_DECLARE_METATYPE(Diagram *)
 

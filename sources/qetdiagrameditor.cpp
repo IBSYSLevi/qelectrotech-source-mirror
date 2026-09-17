@@ -21,6 +21,7 @@
 #endif
 #include <QCoreApplication>
 #include "ElementsCollection/elementscollectionwidget.h"
+#include "dataBase/ui/cabinetlayoutsourcewidget.h"
 #include "QWidgetAnimation/qwidgetanimation.h"
 #include "autoNum/ui/autonumberingdockwidget.h"
 #include "conductornumexport.h"
@@ -127,6 +128,7 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 
 	setUpElementsPanel();
 	setUpElementsCollectionWidget();
+	setUpCabinetLayoutSourceWidget();
 	setUpUndoStack();
 	setUpSelectionPropertiesEditor();
 	setUpAutonumberingWidget();
@@ -223,6 +225,29 @@ void QETDiagramEditor::setUpElementsCollectionWidget()
 	m_element_collection_widget->expandFirstItems();
 
 	addDockWidget(Qt::RightDockWidgetArea, m_qdw_elmt_collection);
+}
+
+/**
+	@brief QETDiagramEditor::setUpCabinetLayoutSourceWidget
+	Set up the dock widget listing the project's placed elements,
+	grouped by folio, as a drag source for building a disposition
+	(cabinet/panel layout) drawing.
+*/
+void QETDiagramEditor::setUpCabinetLayoutSourceWidget()
+{
+	m_qdw_cabinet_layout_source = new QDockWidget(tr("Disposition des armoires"), this);
+	m_qdw_cabinet_layout_source->setObjectName("cabinet_layout_source_widget");
+	m_qdw_cabinet_layout_source->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+	m_qdw_cabinet_layout_source->setFeatures(
+				QDockWidget::DockWidgetClosable
+				|QDockWidget::DockWidgetMovable
+				|QDockWidget::DockWidgetFloatable);
+
+	m_cabinet_layout_source_widget = new CabinetLayoutSourceWidget(m_qdw_cabinet_layout_source);
+	m_qdw_cabinet_layout_source->setWidget(m_cabinet_layout_source_widget);
+	m_cabinet_layout_source_widget->setProject(currentProject());
+
+	addDockWidget(Qt::RightDockWidgetArea, m_qdw_cabinet_layout_source);
 }
 
 /**
@@ -2166,6 +2191,11 @@ void QETDiagramEditor::addProjectView(ProjectView *project_view)
 		}
 	});
 
+	connect(project_view, &ProjectView::diagramActivated, this, [this](DiagramView *dv) {
+		if (m_cabinet_layout_source_widget)
+			m_cabinet_layout_source_widget->setActiveDiagram(dv ? dv->diagram() : nullptr);
+	});
+
 		//Highlight the current page in projectView on project activation
 	connect(this, &QETDiagramEditor::syncElementsPanel, this, [this]() {
 		if (pa && currentDiagramView()) {
@@ -2795,6 +2825,11 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 	slot_updateWindowsMenu();
 	emit syncElementsPanel();
 	updateUsageTrackersActiveState();
+	if (m_cabinet_layout_source_widget) {
+		m_cabinet_layout_source_widget->setProject(currentProject());
+		m_cabinet_layout_source_widget->setActiveDiagram(
+			currentDiagramView() ? currentDiagramView()->diagram() : nullptr);
+	}
 	updateWindowModifiedState();
 }
 
